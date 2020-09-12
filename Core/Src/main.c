@@ -23,6 +23,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "system.h"
 #include "ticker.h"
 /* USER CODE END Includes */
 
@@ -43,13 +44,32 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+extern read_ring_buffer_t read_buffer_USB;
+extern read_ring_buffer_t read_buffer_UDP;
+extern write_ring_buffer_t write_buffer_USB;
+extern write_ring_buffer_t write_buffer_UDP;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 /* USER CODE BEGIN PFP */
+void write_buffer(write_ring_buffer_t *buffer, uint8_t *data, uint8_t length);
+
+void write_cmd_USB(uint8_t cmd, uint8_t *payload, uint8_t length);
+void write_cmd_UDP(uint8_t cmd, uint8_t *payload, uint8_t length);
+
+void read_data_USB(void);
+void read_data_UDP(void);
+
+void write_data_USB(void);
+void write_data_UDP(void);
+
+uint8_t xor(uint8_t cmd, uint8_t *payload, uint8_t payload_init, uint8_t payload_length);
+
+void timeout_USB(void);
+void timeout_UDP(void);
+
 void led_blink(void);
 /* USER CODE END PFP */
 
@@ -90,17 +110,36 @@ int main(void)
   /* USER CODE BEGIN 2 */
   init_ticker_core();
 
-  new_ticker_ms(led_blink, 250, LOW_PRIORITY);
+  new_ticker_ms(led_blink, 500, LOW_PRIORITY);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  read_buffer_USB.read_index = 0;
+  read_buffer_USB.write_index = 0;
+  read_buffer_USB.read_state = 0;
+
+  read_buffer_UDP.read_index = 0;
+  read_buffer_UDP.write_index = 0;
+  read_buffer_UDP.read_state = 0;
+
+  write_buffer_USB.read_index = 0;
+  write_buffer_USB.write_index = 0;
+
+  write_buffer_UDP.read_index = 0;
+  write_buffer_UDP.write_index = 0;
+
   while (1)
   {
 	  execute_ticker_pending();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  read_data_USB();
+	  read_data_UDP();
+
+	  write_data_USB();
+	  write_data_UDP();
   }
   /* USER CODE END 3 */
 }
@@ -177,6 +216,349 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void write_buffer(write_ring_buffer_t *buffer, uint8_t *data, uint8_t length)
+{
+	for (uint8_t i = 0 ; i < length ; i++)
+	{
+		buffer->data[buffer->write_index] = data[i];
+
+		buffer->write_index++;
+	}
+}
+
+void write_cmd_USB(uint8_t cmd, uint8_t *payload, uint8_t length)
+{
+	write_buffer(&write_buffer_USB, (uint8_t *)("UNER"), 4);
+	write_buffer(&write_buffer_USB, &length, 1);
+	write_buffer(&write_buffer_USB, (uint8_t *)(":"), 1);
+	write_buffer(&write_buffer_USB, &cmd, 1);
+	write_buffer(&write_buffer_USB, payload, length);
+
+	uint8_t checksum = xor(cmd, payload, 0, length);
+
+	write_buffer(&write_buffer_USB, &checksum, 1);
+}
+
+void write_cmd_UDP(uint8_t cmd, uint8_t *payload, uint8_t length)
+{
+	write_buffer(&write_buffer_UDP, (uint8_t *)("UNER"), 4);
+	write_buffer(&write_buffer_UDP, &length, 1);
+	write_buffer(&write_buffer_UDP, (uint8_t *)(":"), 1);
+	write_buffer(&write_buffer_UDP, &cmd, 1);
+	write_buffer(&write_buffer_UDP, payload, length);
+
+	uint8_t checksum = xor(cmd, payload, 0, length);
+
+	write_buffer(&write_buffer_UDP, &checksum, 1);
+}
+
+
+void read_data_USB(void)
+{
+	if (read_buffer_USB.read_index != read_buffer_USB.write_index)
+	{
+		switch (read_buffer_USB.read_state)
+		{
+			// Inicio de la cabecera
+			case 0:
+				if (read_buffer_USB.data[read_buffer_USB.read_index] == 'U')
+				{
+					read_buffer_USB.read_state = 1;
+
+					//new_ticker_ms(timeout_USB, 200, LOW_PRIORITY);
+				}
+
+				break;
+
+			case 1:
+				if (read_buffer_USB.data[read_buffer_USB.read_index] == 'N')
+				{
+					read_buffer_USB.read_state = 2;
+				}
+
+				else
+				{
+					read_buffer_USB.read_state = 0;
+				}
+
+				break;
+
+			case 2:
+				if (read_buffer_USB.data[read_buffer_USB.read_index] == 'E')
+				{
+					read_buffer_USB.read_state = 3;
+				}
+
+				else
+				{
+					read_buffer_USB.read_state = 0;
+				}
+
+				break;
+
+			case 3:
+				if (read_buffer_USB.data[read_buffer_USB.read_index] == 'R')
+				{
+					read_buffer_USB.read_state = 4;
+				}
+
+				else
+				{
+					read_buffer_USB.read_state = 0;
+				}
+
+				break;
+
+			case 4:
+				read_buffer_USB.payload_length = read_buffer_USB.data[read_buffer_USB.read_index];
+
+				read_buffer_USB.read_state = 5;
+
+				break;
+
+			case 5:
+				if (read_buffer_USB.data[read_buffer_USB.read_index] == ':')
+				{
+					read_buffer_USB.read_state = 6;
+				}
+
+				else
+				{
+					read_buffer_USB.read_state = 0;
+				}
+
+				break;
+
+			// Inicio de la parte de comando y control
+			case 6:
+				read_buffer_USB.payload_init = read_buffer_USB.read_index + 1;
+
+				read_buffer_USB.read_state = 7;
+
+				break;
+
+			case 7:
+				// Si se terminaron de recibir todos los datos
+				if (read_buffer_USB.read_index == (read_buffer_USB.payload_init + read_buffer_USB.payload_length))
+				{
+					// Se comprueba la integridad de datos
+					if (xor(read_buffer_USB.data[read_buffer_USB.payload_init - 1], read_buffer_USB.data,
+							read_buffer_USB.payload_init, read_buffer_USB.payload_length)
+							== read_buffer_USB.data[read_buffer_USB.read_index])
+					{
+						// Analisis del comando recibido
+						switch (read_buffer_USB.data[read_buffer_USB.payload_init - 1])
+						{
+							case 0xF0:  // ALIVE
+								write_cmd_USB(0xF0, NULL, 0x00);
+
+								break;
+
+							default:
+								write_cmd_USB(0xFF, &read_buffer_USB.data[read_buffer_USB.payload_init - 1], 0x01);
+
+								break;
+						}
+					}
+
+					// Corrupcion de datos al recibir
+					else
+					{
+
+					}
+
+					// Detengo el timeout
+					//delete_ticker(timeout_USB);
+					read_buffer_USB.read_state = 0;
+				}
+
+				break;
+		}
+
+		read_buffer_USB.read_index++;
+	}
+}
+
+void read_data_UDP(void)
+{
+	if (read_buffer_UDP.read_index != read_buffer_UDP.write_index)
+	{
+		switch (read_buffer_UDP.read_state)
+		{
+			// Inicio de la cabecera
+			case 0:
+				if (read_buffer_UDP.data[read_buffer_UDP.read_index] == 'U')
+				{
+					read_buffer_UDP.read_state = 1;
+
+					//new_ticker_ms(timeout_UDP, 200, LOW_PRIORITY);
+				}
+
+				break;
+
+			case 1:
+				if (read_buffer_UDP.data[read_buffer_UDP.read_index] == 'N')
+				{
+					read_buffer_UDP.read_state = 2;
+				}
+
+				else
+				{
+					read_buffer_UDP.read_state = 0;
+				}
+
+				break;
+
+			case 2:
+				if (read_buffer_UDP.data[read_buffer_UDP.read_index] == 'E')
+				{
+					read_buffer_UDP.read_state = 3;
+				}
+
+				else
+				{
+					read_buffer_UDP.read_state = 0;
+				}
+
+				break;
+
+			case 3:
+				if (read_buffer_UDP.data[read_buffer_UDP.read_index] == 'R')
+				{
+					read_buffer_UDP.read_state = 4;
+				}
+
+				else
+				{
+					read_buffer_UDP.read_state = 0;
+				}
+
+				break;
+
+			case 4:
+				read_buffer_UDP.payload_length = read_buffer_UDP.data[read_buffer_UDP.read_index];
+
+				read_buffer_UDP.read_state = 5;
+
+				break;
+
+			case 5:
+				if (read_buffer_UDP.data[read_buffer_UDP.read_index] == ':')
+				{
+					read_buffer_UDP.read_state = 6;
+				}
+
+				else
+				{
+					read_buffer_UDP.read_state = 0;
+				}
+
+				break;
+
+			// Inicio de la parte de comando y control
+			case 6:
+				read_buffer_UDP.payload_init = read_buffer_UDP.read_index + 1;
+
+				read_buffer_UDP.read_state = 7;
+
+				break;
+
+			case 7:
+				// Si se terminaron de recibir todos los datos
+				if (read_buffer_UDP.read_index == (read_buffer_UDP.payload_init + read_buffer_UDP.payload_length))
+				{
+					// Se comprueba la integridad de datos
+					if (xor(read_buffer_UDP.data[read_buffer_UDP.payload_init - 1], read_buffer_UDP.data,
+							read_buffer_UDP.payload_init, read_buffer_UDP.payload_length)
+							== read_buffer_UDP.data[read_buffer_UDP.read_index])
+					{
+						// Analisis del comando recibido
+						switch (read_buffer_UDP.data[read_buffer_UDP.payload_init - 1])
+						{
+							case 0xF0:  // ALIVE
+								write_cmd_UDP(0xF0, NULL, 0x00);
+
+								break;
+
+							default:
+								write_cmd_UDP(0xFF, &read_buffer_UDP.data[read_buffer_UDP.payload_init - 1], 0x01);
+
+								break;
+						}
+					}
+
+					// Corrupcion de datos al recibir
+					else
+					{
+
+					}
+
+					// Detengo el timeout
+					//delete_ticker(timeout_UDP);
+					read_buffer_UDP.read_state = 0;
+				}
+
+				break;
+		}
+
+		read_buffer_UDP.read_index++;
+	}
+}
+
+void write_data_USB(void)
+{
+	if (write_buffer_USB.read_index != write_buffer_USB.write_index)
+	{
+		if (CDC_Transmit_FS(&write_buffer_USB.data[write_buffer_USB.read_index], 1) == USBD_OK)
+		{
+			write_buffer_USB.read_index++;
+		}
+	}
+}
+
+void write_data_UDP(void)
+{
+	if (write_buffer_UDP.read_index != write_buffer_UDP.write_index)
+	{
+
+	}
+}
+
+uint8_t xor(uint8_t cmd, uint8_t *payload, uint8_t payload_init, uint8_t payload_length)
+{
+	uint8_t xor = 0x00;
+
+	xor ^= 'U';
+	xor ^= 'N';
+	xor ^= 'E';
+	xor ^= 'R';
+	xor ^= payload_length;
+	xor ^= ':';
+
+	xor ^= cmd;
+
+	for (uint8_t i = payload_init ; i < payload_init + payload_length ; i++)
+	{
+		xor ^= payload[i];
+	}
+
+	return xor;
+}
+
+void timeout_USB(void)
+{
+	delete_ticker(timeout_USB);
+
+	read_buffer_USB.read_state = 0;
+}
+
+void timeout_UDP(void)
+{
+	delete_ticker(timeout_UDP);
+
+	read_buffer_UDP.read_state = 0;
+}
+
 void led_blink(void)
 {
 	HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
