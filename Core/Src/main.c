@@ -42,17 +42,23 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
 extern read_ring_buffer_t read_buffer_USB;
 extern read_ring_buffer_t read_buffer_UDP;
 extern write_ring_buffer_t write_buffer_USB;
 extern write_ring_buffer_t write_buffer_UDP;
+
+extern uint8_t debug;
+
+volatile uint8_t byte_receibe_usart;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_USART3_UART_Init(void);
 /* USER CODE BEGIN PFP */
 void write_buffer(write_ring_buffer_t *buffer, uint8_t *data, uint8_t length);
 
@@ -107,10 +113,13 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USB_DEVICE_Init();
+  MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
   init_ticker_core();
 
   new_ticker_ms(led_blink, 500, LOW_PRIORITY);
+
+  HAL_UART_Receive_IT(&huart3, (uint8_t *)(&byte_receibe_usart), 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -128,6 +137,8 @@ int main(void)
 
   write_buffer_UDP.read_index = 0;
   write_buffer_UDP.write_index = 0;
+
+  debug = DEBUG_OFF;
 
   while (1)
   {
@@ -190,6 +201,39 @@ void SystemClock_Config(void)
 }
 
 /**
+  * @brief USART3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART3_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART3_Init 0 */
+
+  /* USER CODE END USART3_Init 0 */
+
+  /* USER CODE BEGIN USART3_Init 1 */
+
+  /* USER CODE END USART3_Init 1 */
+  huart3.Instance = USART3;
+  huart3.Init.BaudRate = 115200;
+  huart3.Init.WordLength = UART_WORDLENGTH_8B;
+  huart3.Init.StopBits = UART_STOPBITS_1;
+  huart3.Init.Parity = UART_PARITY_NONE;
+  huart3.Init.Mode = UART_MODE_TX_RX;
+  huart3.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart3.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART3_Init 2 */
+
+  /* USER CODE END USART3_Init 2 */
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -201,6 +245,7 @@ static void MX_GPIO_Init(void)
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
@@ -265,7 +310,7 @@ void read_data_USB(void)
 				{
 					read_buffer_USB.read_state = 1;
 
-					//new_ticker_ms(timeout_USB, 200, LOW_PRIORITY);
+					new_ticker_ms(timeout_USB, 200, LOW_PRIORITY);
 				}
 
 				break;
@@ -342,7 +387,7 @@ void read_data_USB(void)
 				if (read_buffer_USB.read_index == (read_buffer_USB.payload_init + read_buffer_USB.payload_length))
 				{
 					// Se comprueba la integridad de datos
-					if (xor(read_buffer_USB.data[read_buffer_USB.payload_init - 1], read_buffer_USB.data,
+					if (xor(read_buffer_USB.data[read_buffer_USB.payload_init - 1], (uint8_t *)(read_buffer_USB.data),
 							read_buffer_USB.payload_init, read_buffer_USB.payload_length)
 							== read_buffer_USB.data[read_buffer_USB.read_index])
 					{
@@ -354,8 +399,53 @@ void read_data_USB(void)
 
 								break;
 
-							default:
-								write_cmd_USB(0xFF, &read_buffer_USB.data[read_buffer_USB.payload_init - 1], 0x01);
+							case 0xF1:	// Modo debug
+								if (read_buffer_USB.data[read_buffer_USB.payload_init] == 0xFF)
+								{
+									debug = DEBUG_ON;
+
+									uint8_t request = 0x00;
+
+									write_cmd_USB(0xF1, &request, 0x01);
+								}
+
+								else if (read_buffer_USB.data[read_buffer_USB.payload_init] == 0x00)
+								{
+									debug = DEBUG_OFF;
+
+									uint8_t request = 0x00;
+
+									write_cmd_USB(0xF1, &request, 0x01);
+								}
+
+								else
+								{
+									uint8_t request = 0xFF;
+
+									write_cmd_USB(0xF1, &request, 0x01);
+								}
+
+								break;
+
+							case 0xF2:	// Envio de comando AT
+								for (uint8_t i = 0 ; i < read_buffer_USB.payload_length ; i++)
+								{
+									write_buffer_UDP.data[write_buffer_UDP.write_index] =
+											read_buffer_USB.data[read_buffer_USB.payload_init + i];
+
+									write_buffer_UDP.write_index++;
+								}
+
+								write_buffer_UDP.data[write_buffer_UDP.write_index] = '\r';
+								write_buffer_UDP.write_index++;
+
+								write_buffer_UDP.data[write_buffer_UDP.write_index] = '\n';
+								write_buffer_UDP.write_index++;
+
+								break;
+
+							default:	// Comando no valido
+								write_cmd_USB(0xFF, (uint8_t *)(&read_buffer_USB.data[read_buffer_USB.payload_init - 1]), 0x01);
 
 								break;
 						}
@@ -368,7 +458,7 @@ void read_data_USB(void)
 					}
 
 					// Detengo el timeout
-					//delete_ticker(timeout_USB);
+					delete_ticker(timeout_USB);
 					read_buffer_USB.read_state = 0;
 				}
 
@@ -391,7 +481,7 @@ void read_data_UDP(void)
 				{
 					read_buffer_UDP.read_state = 1;
 
-					//new_ticker_ms(timeout_UDP, 200, LOW_PRIORITY);
+					new_ticker_ms(timeout_UDP, 200, LOW_PRIORITY);
 				}
 
 				break;
@@ -468,7 +558,7 @@ void read_data_UDP(void)
 				if (read_buffer_UDP.read_index == (read_buffer_UDP.payload_init + read_buffer_UDP.payload_length))
 				{
 					// Se comprueba la integridad de datos
-					if (xor(read_buffer_UDP.data[read_buffer_UDP.payload_init - 1], read_buffer_UDP.data,
+					if (xor(read_buffer_UDP.data[read_buffer_UDP.payload_init - 1], (uint8_t *)(read_buffer_UDP.data),
 							read_buffer_UDP.payload_init, read_buffer_UDP.payload_length)
 							== read_buffer_UDP.data[read_buffer_UDP.read_index])
 					{
@@ -481,7 +571,7 @@ void read_data_UDP(void)
 								break;
 
 							default:
-								write_cmd_UDP(0xFF, &read_buffer_UDP.data[read_buffer_UDP.payload_init - 1], 0x01);
+								write_cmd_UDP(0xFF, (uint8_t *)(&read_buffer_UDP.data[read_buffer_UDP.payload_init - 1]), 0x01);
 
 								break;
 						}
@@ -494,7 +584,7 @@ void read_data_UDP(void)
 					}
 
 					// Detengo el timeout
-					//delete_ticker(timeout_UDP);
+					delete_ticker(timeout_UDP);
 					read_buffer_UDP.read_state = 0;
 				}
 
@@ -509,7 +599,7 @@ void write_data_USB(void)
 {
 	if (write_buffer_USB.read_index != write_buffer_USB.write_index)
 	{
-		if (CDC_Transmit_FS(&write_buffer_USB.data[write_buffer_USB.read_index], 1) == USBD_OK)
+		if (CDC_Transmit_FS((uint8_t *)(&write_buffer_USB.data[write_buffer_USB.read_index]), 1) == USBD_OK)
 		{
 			write_buffer_USB.read_index++;
 		}
@@ -520,7 +610,10 @@ void write_data_UDP(void)
 {
 	if (write_buffer_UDP.read_index != write_buffer_UDP.write_index)
 	{
-
+		if (HAL_UART_Transmit_IT(&huart3, (uint8_t *)(&write_buffer_UDP.data[write_buffer_UDP.read_index]), 1) == HAL_OK)
+		{
+			write_buffer_UDP.read_index++;
+		}
 	}
 }
 
@@ -562,6 +655,25 @@ void timeout_UDP(void)
 void led_blink(void)
 {
 	HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	read_buffer_UDP.data[read_buffer_UDP.write_index] = byte_receibe_usart;
+	read_buffer_UDP.write_index++;
+
+	if (debug == DEBUG_ON)
+	{
+		write_buffer_USB.data[write_buffer_USB.write_index] = byte_receibe_usart;
+		write_buffer_USB.write_index++;
+	}
+
+	HAL_UART_Receive_IT(&huart3, (uint8_t *)(&byte_receibe_usart), 1);
 }
 /* USER CODE END 4 */
 

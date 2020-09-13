@@ -96,6 +96,9 @@ uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
 
 /* USER CODE BEGIN PRIVATE_VARIABLES */
 extern read_ring_buffer_t read_buffer_USB;
+extern write_ring_buffer_t write_buffer_USB;
+
+extern uint8_t debug;
 /* USER CODE END PRIVATE_VARIABLES */
 
 /**
