@@ -23,8 +23,6 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <stdio.h>
-
 #include "system.h"
 #include "ticker.h"
 /* USER CODE END Includes */
@@ -82,7 +80,9 @@ void write_data_UDP(void);
 
 uint8_t xor(uint8_t cmd, uint8_t *payload, uint8_t payload_init, uint8_t payload_length);
 
-uint8_t command_compare(char *str1, uint8_t init, uint8_t length, char *str2);
+uint8_t command_at(uint8_t *cmd, uint8_t init, uint8_t end, uint8_t *cmd_cmp);
+
+void esp_init(void);
 
 void timeout_USB(void);
 void timeout_UDP(void);
@@ -128,7 +128,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
   init_ticker_core();
 
-  new_ticker_ms(led_blink, 1000, LOW_PRIORITY);
+  new_ticker_ms(led_blink, 50, HIGH_PRIORITY);
 
   HAL_UART_Receive_IT(&huart3, (uint8_t *)(&byte_receibe_usart), 1);
   /* USER CODE END 2 */
@@ -154,9 +154,9 @@ int main(void)
   wifi.ip_pc = ip_pc;
   wifi.debug = WIFI_DEBUG_OFF;
 
-  HAL_Delay(5000);
-  write_cmd_AT((uint8_t *)("AT"), 2);
-  write_cmd_AT((uint8_t *)("AT+CIPSTATUS"), 12);
+  // Configuracion inicial del modulo WiFi por defecto
+  HAL_Delay(1000);
+  new_ticker_ms(esp_init, 2000, LOW_PRIORITY);
 
   while (1)
   {
@@ -499,22 +499,25 @@ void read_data_UDP(void)
 		switch (read_buffer_UDP.read_state)
 		{
 			case 0:
-				if (read_buffer_UDP.data[read_buffer_UDP.read_index] != 0x0D &&
-						read_buffer_UDP.data[read_buffer_UDP.read_index] != 0x0A)
+				if (read_buffer_UDP.data[read_buffer_UDP.read_index] != '\r' &&
+						read_buffer_UDP.data[read_buffer_UDP.read_index] != '\n')
 				{
-					read_buffer_UDP.payload_init = read_buffer_UDP.read_index;
+					new_ticker_ms(timeout_UDP, 100, LOW_PRIORITY);
+
+					wifi.cmd_init = read_buffer_UDP.read_index;
 
 					read_buffer_UDP.read_state = 1;
-
-					new_ticker_ms(timeout_UDP, 100, LOW_PRIORITY);
 				}
 
 				break;
 
 			case 1:
-				if (read_buffer_UDP.data[read_buffer_UDP.read_index] == 0x0D)
+				if (read_buffer_UDP.data[read_buffer_UDP.read_index] == '\r' ||
+						read_buffer_UDP.data[read_buffer_UDP.read_index] == '\n')
 				{
-					read_buffer_UDP.payload_length = read_buffer_UDP.read_index;
+					delete_ticker(timeout_UDP);
+
+					wifi.cmd_end = read_buffer_UDP.read_index - 1;
 
 					read_buffer_UDP.read_state = 2;
 				}
@@ -522,32 +525,60 @@ void read_data_UDP(void)
 				break;
 
 			case 2:
-				if (command_compare((char *)(read_buffer_UDP.data), read_buffer_UDP.payload_init,
-						read_buffer_UDP.payload_length, (char *)("AT")))
+				read_buffer_UDP.read_state = 0;
+
+				if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_end, (uint8_t *)("AT")))
 				{
-					wifi.command = WIFI_COMMAND_AT;
+					wifi.cmd = WIFI_COMMAND_AT;
+
+					read_buffer_UDP.read_state = 3;
 				}
 
-				else if (command_compare((char *)(read_buffer_UDP.data), read_buffer_UDP.payload_init,
-						read_buffer_UDP.payload_length, (char *)("AT+CIPSTATUS")))
+				else if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_end, (uint8_t *)("AT+CWMODE_CUR=1")))
 				{
-					wifi.command = WIFI_COMMAND_CIPSTATUS;
+					wifi.cmd = WIFI_COMMAND_CWMODE_CUR_1;
+
+					read_buffer_UDP.read_state = 3;
 				}
 
-				else
+				else if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_init + 12, (uint8_t *)("AT+CWJAP_CUR=")))
 				{
-					wifi.command = WIFI_COMMAND_NO_FOUND;
+					wifi.cmd = WIFI_COMMAND_CWJAP_CUR;
+
+					read_buffer_UDP.read_state = 0;
 				}
 
-				read_buffer_UDP.read_state = 3;
+				else if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_end, (uint8_t *)("WIFI CONNECTED")))
+				{
+					wifi.status = WIFI_STATUS_CONNECTED;
+
+					read_buffer_UDP.read_state = 0;
+				}
+
+				else if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_end, (uint8_t *)("WIFI GOT IP")))
+				{
+					wifi.status = WIFI_STATUS_GOT_IP;
+
+					read_buffer_UDP.read_state = 0;
+				}
+
+				else if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_init + 13, (uint8_t *)("AT+CIPSTA_CUR=")))
+				{
+					wifi.cmd = WIFI_COMMAND_CIPSTA_CUR;
+
+					read_buffer_UDP.read_state = 3;
+				}
+
 
 				break;
 
 			case 3:
-				if (read_buffer_UDP.data[read_buffer_UDP.read_index] != 0x0D &&
-						read_buffer_UDP.data[read_buffer_UDP.read_index] != 0x0A)
+				if (read_buffer_UDP.data[read_buffer_UDP.read_index] != '\r' &&
+						read_buffer_UDP.data[read_buffer_UDP.read_index] != '\n')
 				{
-					read_buffer_UDP.payload_init = read_buffer_UDP.read_index;
+					new_ticker_ms(timeout_UDP, 100, LOW_PRIORITY);
+
+					wifi.cmd_init = read_buffer_UDP.read_index;
 
 					read_buffer_UDP.read_state = 4;
 				}
@@ -555,9 +586,12 @@ void read_data_UDP(void)
 				break;
 
 			case 4:
-				if (read_buffer_UDP.data[read_buffer_UDP.read_index] == 0x0D)
+				if (read_buffer_UDP.data[read_buffer_UDP.read_index] == '\r' ||
+						read_buffer_UDP.data[read_buffer_UDP.read_index] == '\n')
 				{
-					read_buffer_UDP.payload_length = read_buffer_UDP.read_index;
+					delete_ticker(timeout_UDP);
+
+					wifi.cmd_end = read_buffer_UDP.read_index - 1;
 
 					read_buffer_UDP.read_state = 5;
 				}
@@ -565,50 +599,49 @@ void read_data_UDP(void)
 				break;
 
 			case 5:
-				switch (wifi.command)
+				switch (wifi.cmd)
 				{
 					case WIFI_COMMAND_AT:
-						if (command_compare((char *)(read_buffer_UDP.data), read_buffer_UDP.payload_init,
-								read_buffer_UDP.payload_length, (char *)("OK")))
+						if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_end, (uint8_t *)("OK")))
 						{
 							wifi.status = WIFI_STATUS_INIT;
-
-							change_ticker_ms(led_blink, 500);
 						}
 
-						else if (command_compare((char *)(read_buffer_UDP.data), read_buffer_UDP.payload_init,
-								read_buffer_UDP.payload_length, (char *)("ERROR")))
+						else if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_end, (uint8_t *)("ERROR")))
 						{
 							wifi.status = WIFI_STATUS_NO_INIT;
 						}
 
 						break;
 
-					case WIFI_COMMAND_CIPSTATUS:
-						if (command_compare((char *)(read_buffer_UDP.data), read_buffer_UDP.payload_init,
-								read_buffer_UDP.payload_length, (char *)("STATUS:2")))
+					case WIFI_COMMAND_CWMODE_CUR_1:
+						if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_end, (uint8_t *)("OK")))
 						{
-							wifi.status = WIFI_STATUS_CONNECT;
-
-							change_ticker_ms(led_blink, 250);
+							wifi.status = WIFI_STATUS_STATION;
 						}
 
-						else if (command_compare((char *)(read_buffer_UDP.data), read_buffer_UDP.payload_init,
-								read_buffer_UDP.payload_length, (char *)("STATUS:3")))
+						else if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_end, (uint8_t *)("ERROR")))
 						{
-							wifi.status = WIFI_STATUS_UDP_INIT;
-						}
-
-						else
-						{
-							wifi.status = WIFI_STATUS_DISCONNECT;
+							wifi.status = WIFI_STATUS_NO_INIT;
 						}
 
 						break;
-				}
 
-				read_buffer_UDP.read_state = 0;
-				delete_ticker(timeout_UDP);
+					case WIFI_COMMAND_CIPSTA_CUR:
+						if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_end, (uint8_t *)("OK")))
+						{
+							wifi.status = WIFI_STATUS_SET_IP;
+						}
+
+						else if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_end, (uint8_t *)("ERROR")))
+						{
+							wifi.status = WIFI_STATUS_NO_INIT;
+						}
+
+						break;
+
+					read_buffer_UDP.read_state = 0;
+				}
 
 				break;
 		}
@@ -660,21 +693,78 @@ uint8_t xor(uint8_t cmd, uint8_t *payload, uint8_t payload_init, uint8_t payload
 	return xor;
 }
 
-uint8_t command_compare(char *str1, uint8_t init, uint8_t length, char *str2)
+uint8_t command_at(uint8_t *cmd, uint8_t init, uint8_t end, uint8_t *cmd_cmp)
 {
 	uint8_t i = init;
+	uint8_t j = 0;
 
-	while (i != length)
+	while (i != (end + 1))
 	{
-		if (str1[i] != str2[i - init])
+		if (cmd[i] != cmd_cmp[j])
 		{
 			return 0;
 		}
 
 		i++;
+		j++;
 	}
 
 	return 1;
+}
+
+void esp_init(void)
+{
+	switch (wifi.status)
+	{
+		case WIFI_STATUS_BUSY:
+
+			break;
+
+		case WIFI_STATUS_NO_INIT:
+			write_cmd_AT((uint8_t *)("AT"), 2);
+
+			wifi.status = WIFI_STATUS_BUSY;
+
+			break;
+
+		case WIFI_STATUS_INIT:
+			write_cmd_AT((uint8_t *)("AT+CWMODE_CUR=1"), 15);
+
+			wifi.status = WIFI_STATUS_BUSY;
+
+			break;
+
+		case WIFI_STATUS_STATION:
+			write_cmd_AT((uint8_t *)("AT+CWJAP_CUR=\"Gabi-RED\",\"GabiAndi26040102.\""), 43);
+
+			wifi.status = WIFI_STATUS_BUSY;
+
+			break;
+
+		case WIFI_STATUS_CONNECTED:
+
+			wifi.status = WIFI_STATUS_BUSY;
+
+			break;
+
+		case WIFI_STATUS_GOT_IP:
+			//write_cmd_AT((uint8_t *)("AT+CIPSTA_CUR=\"10.0.0.10\""), 25);
+
+			change_ticker_ms(led_blink, LED_OK);
+
+			delete_ticker(esp_init);
+
+			//wifi.status = WIFI_STATUS_BUSY;
+
+			break;
+
+		case WIFI_STATUS_SET_IP:
+			change_ticker_ms(led_blink, LED_OK);
+
+			delete_ticker(esp_init);
+
+			break;
+	}
 }
 
 void timeout_USB(void)
