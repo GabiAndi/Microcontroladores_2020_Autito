@@ -1,43 +1,43 @@
 #include "ticker.h"
 
-void init_ticker_core(void)
+void ticker_init_core(void)
 {
-	for (uint8_t i = 0 ; i < MAX_TICKERS_USE ; i++)
+	for (uint8_t i = 0 ; i < TICKER_MAX_USE ; i++)
 	{
-		user_tickers[i] = NULL;
+		tickers_user[i] = NULL;
 	}
 }
 
-void new_ticker_ms(ptrfun function, uint32_t ms, uint8_t priority)
+void ticker_new(tick_ptrfun function, uint32_t ms, uint8_t priority)
 {
-	for (uint8_t i = 0 ; i < MAX_TICKERS_USE ; i++)
+	for (uint8_t i = 0 ; i < TICKER_MAX_USE ; i++)
 	{
-		if (user_tickers[i] == NULL)
+		if (tickers_user[i] == NULL)
 		{
-			user_tickers[i] = (ticker_t *)(malloc(sizeof(ticker_t)));
+			tickers_user[i] = (ticker_t *)(malloc(sizeof(ticker_t)));
 
-			user_tickers[i]->ms = ms;
-			user_tickers[i]->count = 0;
-			user_tickers[i]->priority = priority;
-			user_tickers[i]->calls = 0;
-			user_tickers[i]->function = function;
+			tickers_user[i]->ms = ms;
+			tickers_user[i]->count = 0;
+			tickers_user[i]->priority = priority;
+			tickers_user[i]->calls = 0;
+			tickers_user[i]->function = function;
 
 			break;
 		}
 	}
 }
 
-void delete_ticker(ptrfun function)
+void ticker_delete(tick_ptrfun function)
 {
-	for (uint8_t i = 0 ; i < MAX_TICKERS_USE ; i++)
+	for (uint8_t i = 0 ; i < TICKER_MAX_USE ; i++)
 	{
-		if (user_tickers[i] != NULL)
+		if (tickers_user[i] != NULL)
 		{
-			if (user_tickers[i]->function == function)
+			if (tickers_user[i]->function == function)
 			{
-				free(user_tickers[i]);
+				free(tickers_user[i]);
 
-				user_tickers[i] = NULL;
+				tickers_user[i] = NULL;
 
 				break;
 			}
@@ -45,15 +45,15 @@ void delete_ticker(ptrfun function)
 	}
 }
 
-void change_ticker_ms(ptrfun function, uint32_t ms)
+void ticker_change_period(tick_ptrfun function, uint32_t ms)
 {
-	for (uint8_t i = 0 ; i < MAX_TICKERS_USE ; i++)
+	for (uint8_t i = 0 ; i < TICKER_MAX_USE ; i++)
 	{
-		if (user_tickers[i] != NULL)
+		if (tickers_user[i] != NULL)
 		{
-			if (user_tickers[i]->function == function)
+			if (tickers_user[i]->function == function)
 			{
-				user_tickers[i]->ms = ms;
+				tickers_user[i]->ms = ms;
 
 				break;
 			}
@@ -61,15 +61,15 @@ void change_ticker_ms(ptrfun function, uint32_t ms)
 	}
 }
 
-void change_ticker_priority(ptrfun function, uint8_t priority)
+void ticker_change_priority(tick_ptrfun function, uint8_t priority)
 {
-	for (uint8_t i = 0 ; i < MAX_TICKERS_USE ; i++)
+	for (uint8_t i = 0 ; i < TICKER_MAX_USE ; i++)
 	{
-		if (user_tickers[i] != NULL)
+		if (tickers_user[i] != NULL)
 		{
-			if (user_tickers[i]->function == function)
+			if (tickers_user[i]->function == function)
 			{
-				user_tickers[i]->priority = priority;
+				tickers_user[i]->priority = priority;
 
 				break;
 			}
@@ -77,19 +77,19 @@ void change_ticker_priority(ptrfun function, uint8_t priority)
 	}
 }
 
-void execute_ticker_pending(void)
+void ticker_execute_pending(void)
 {
-	for (uint8_t i = 0 ; i < MAX_TICKERS_USE ; i++)
+	for (uint8_t i = 0 ; i < TICKER_MAX_USE ; i++)
 	{
-		if (user_tickers[i] != NULL)
+		if (tickers_user[i] != NULL)
 		{
-			if ((user_tickers[i]->count >= user_tickers[i]->ms) && (user_tickers[i]->priority == LOW_PRIORITY))
+			if ((tickers_user[i]->count >= tickers_user[i]->ms) && (tickers_user[i]->priority == TICKER_LOW_PRIORITY))
 			{
-				user_tickers[i]->count = 0;
+				tickers_user[i]->count = 0;
 
-				user_tickers[i]->function();
+				tickers_user[i]->function();
 
-				user_tickers[i]->calls++;
+				tickers_user[i]->calls++;
 			}
 		}
 	}

@@ -24,7 +24,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "system.h"
-#include "ticker.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,20 +44,7 @@
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
-// Buffers de transmisión y recepción
-extern read_ring_buffer_t read_buffer_USB;
-extern read_ring_buffer_t read_buffer_UDP;
-extern write_ring_buffer_t write_buffer_USB;
-extern write_ring_buffer_t write_buffer_UDP;
 
-// Manejo de la ESP8266
-extern wifi_manager_t wifi;
-
-char *ip_mcu = "192.168.0.100";
-char *ip_pc = "192.168.0.17";
-
-// Byte temporal de recepción de datos
-volatile uint8_t byte_receibe_usart;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -66,27 +52,6 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART3_UART_Init(void);
 /* USER CODE BEGIN PFP */
-void write_buffer(write_ring_buffer_t *buffer, uint8_t *data, uint8_t length);
-
-void write_cmd_USB(uint8_t cmd, uint8_t *payload, uint8_t length);
-void write_cmd_UDP(uint8_t cmd, uint8_t *payload, uint8_t length);
-void write_cmd_AT(uint8_t *payload, uint8_t length);
-
-void read_data_USB(void);
-void read_data_UDP(void);
-
-void write_data_USB(void);
-void write_data_UDP(void);
-
-uint8_t xor(uint8_t cmd, uint8_t *payload, uint8_t payload_init, uint8_t payload_length);
-
-uint8_t command_at(uint8_t *cmd, uint8_t init, uint8_t end, uint8_t *cmd_cmp);
-
-void esp_init(void);
-
-void timeout_USB(void);
-void timeout_UDP(void);
-
 void led_blink(void);
 /* USER CODE END PFP */
 
@@ -126,49 +91,30 @@ int main(void)
   MX_USB_DEVICE_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
-  init_ticker_core();
+  system_init();	// Inicia la configuración del sistema
 
-  new_ticker_ms(led_blink, 50, HIGH_PRIORITY);
+  ticker_new(led_blink, LED_FAIL, TICKER_LOW_PRIORITY);	// Ticker para el led de estado
 
   HAL_UART_Receive_IT(&huart3, (uint8_t *)(&byte_receibe_usart), 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  read_buffer_USB.read_index = 0;
-  read_buffer_USB.write_index = 0;
-  read_buffer_USB.read_state = 0;
-
-  read_buffer_UDP.read_index = 0;
-  read_buffer_UDP.write_index = 0;
-  read_buffer_UDP.read_state = 0;
-
-  write_buffer_USB.read_index = 0;
-  write_buffer_USB.write_index = 0;
-
-  write_buffer_UDP.read_index = 0;
-  write_buffer_UDP.write_index = 0;
-
-  wifi.status = WIFI_STATUS_NO_INIT;
-  wifi.ip_mcu = ip_mcu;
-  wifi.ip_pc = ip_pc;
-  wifi.debug = WIFI_DEBUG_OFF;
-
   // Configuracion inicial del modulo WiFi por defecto
-  HAL_Delay(1000);
-  new_ticker_ms(esp_init, 2000, LOW_PRIORITY);
+  //new_ticker_ms(esp_init, 2000, LOW_PRIORITY);
 
   while (1)
   {
-	  execute_ticker_pending();
+	  ticker_execute_pending();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  read_data_USB();
-	  read_data_UDP();
+	  // Para el USB
+	  usbcdc_read_pending();
+	  usbcdc_write_pending();
 
-	  write_data_USB();
-	  write_data_UDP();
+	  esp_read_pending();
+	  esp_write_pending();
   }
   /* USER CODE END 3 */
 }
@@ -279,506 +225,89 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-void write_buffer(write_ring_buffer_t *buffer, uint8_t *data, uint8_t length)
-{
-	for (uint8_t i = 0 ; i < length ; i++)
-	{
-		buffer->data[buffer->write_index] = data[i];
-		buffer->write_index++;
-	}
-}
-
-void write_cmd_USB(uint8_t cmd, uint8_t *payload, uint8_t length)
-{
-	// Cabecera UNER
-	write_buffer(&write_buffer_USB, (uint8_t *)("UNER"), 4);
-	write_buffer(&write_buffer_USB, &length, 1);
-	write_buffer(&write_buffer_USB, (uint8_t *)(":"), 1);
-	write_buffer(&write_buffer_USB, &cmd, 1);
-	write_buffer(&write_buffer_USB, payload, length);
-
-	uint8_t checksum = xor(cmd, payload, 0, length);
-
-	write_buffer(&write_buffer_USB, &checksum, 1);
-}
-
-void write_cmd_UDP(uint8_t cmd, uint8_t *payload, uint8_t length)
-{
-	// Cabecera AT
-	write_buffer(&write_buffer_UDP, (uint8_t *)("AT+CIPSEND="), 11);
-	//write_buffer(&write_buffer_UDP, 2, 1);
-	write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
-
-	// Cabecera UNER
-	write_buffer(&write_buffer_UDP, (uint8_t *)("UNER"), 4);
-	write_buffer(&write_buffer_UDP, &length, 1);
-	write_buffer(&write_buffer_UDP, (uint8_t *)(":"), 1);
-	write_buffer(&write_buffer_UDP, &cmd, 1);
-	write_buffer(&write_buffer_UDP, payload, length);
-
-	uint8_t checksum = xor(cmd, payload, 0, length);
-
-	write_buffer(&write_buffer_UDP, &checksum, 1);
-}
-
-void write_cmd_AT(uint8_t *payload, uint8_t length)
-{
-	write_buffer(&write_buffer_UDP, payload, length);
-	write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
-}
-
-void read_data_USB(void)
-{
-	if (read_buffer_USB.read_index != read_buffer_USB.write_index)
-	{
-		switch (read_buffer_USB.read_state)
-		{
-			// Inicio de la cabecera
-			case 0:
-				if (read_buffer_USB.data[read_buffer_USB.read_index] == 'U')
-				{
-					read_buffer_USB.read_state = 1;
-
-					new_ticker_ms(timeout_USB, 200, LOW_PRIORITY);
-				}
-
-				break;
-
-			case 1:
-				if (read_buffer_USB.data[read_buffer_USB.read_index] == 'N')
-				{
-					read_buffer_USB.read_state = 2;
-				}
-
-				else
-				{
-					read_buffer_USB.read_state = 0;
-				}
-
-				break;
-
-			case 2:
-				if (read_buffer_USB.data[read_buffer_USB.read_index] == 'E')
-				{
-					read_buffer_USB.read_state = 3;
-				}
-
-				else
-				{
-					read_buffer_USB.read_state = 0;
-				}
-
-				break;
-
-			case 3:
-				if (read_buffer_USB.data[read_buffer_USB.read_index] == 'R')
-				{
-					read_buffer_USB.read_state = 4;
-				}
-
-				else
-				{
-					read_buffer_USB.read_state = 0;
-				}
-
-				break;
-
-			case 4:
-				read_buffer_USB.payload_length = read_buffer_USB.data[read_buffer_USB.read_index];
-
-				read_buffer_USB.read_state = 5;
-
-				break;
-
-			case 5:
-				if (read_buffer_USB.data[read_buffer_USB.read_index] == ':')
-				{
-					read_buffer_USB.read_state = 6;
-				}
-
-				else
-				{
-					read_buffer_USB.read_state = 0;
-				}
-
-				break;
-
-			// Inicio de la parte de comando y control
-			case 6:
-				read_buffer_USB.payload_init = read_buffer_USB.read_index + 1;
-
-				read_buffer_USB.read_state = 7;
-
-				break;
-
-			case 7:
-				// Si se terminaron de recibir todos los datos
-				if (read_buffer_USB.read_index == (read_buffer_USB.payload_init + read_buffer_USB.payload_length))
-				{
-					// Se comprueba la integridad de datos
-					if (xor(read_buffer_USB.data[read_buffer_USB.payload_init - 1], (uint8_t *)(read_buffer_USB.data),
-							read_buffer_USB.payload_init, read_buffer_USB.payload_length)
-							== read_buffer_USB.data[read_buffer_USB.read_index])
-					{
-						// Analisis del comando recibido
-						switch (read_buffer_USB.data[read_buffer_USB.payload_init - 1])
-						{
-							case 0xF0:  // ALIVE
-								write_cmd_USB(0xF0, NULL, 0x00);
-
-								break;
-
-							case 0xF1:	// Modo debug
-								if (read_buffer_USB.data[read_buffer_USB.payload_init] == 0xFF)
-								{
-									wifi.debug = WIFI_DEBUG_ON;
-
-									uint8_t request = 0x00;
-
-									write_cmd_USB(0xF1, &request, 0x01);
-								}
-
-								else if (read_buffer_USB.data[read_buffer_USB.payload_init] == 0x00)
-								{
-									wifi.debug = WIFI_DEBUG_OFF;
-
-									uint8_t request = 0x00;
-
-									write_cmd_USB(0xF1, &request, 0x01);
-								}
-
-								else
-								{
-									uint8_t request = 0xFF;
-
-									write_cmd_USB(0xF1, &request, 0x01);
-								}
-
-								break;
-
-							case 0xF2:	// Envio de comando AT
-								for (uint8_t i = 0 ; i < read_buffer_USB.payload_length ; i++)
-								{
-									write_buffer_UDP.data[write_buffer_UDP.write_index] =
-											read_buffer_USB.data[read_buffer_USB.payload_init + i];
-
-									write_buffer_UDP.write_index++;
-								}
-
-								break;
-
-							default:	// Comando no valido
-								write_cmd_USB(0xFF, (uint8_t *)(&read_buffer_USB.data[read_buffer_USB.payload_init - 1]), 0x01);
-
-								break;
-						}
-					}
-
-					// Corrupcion de datos al recibir
-					else
-					{
-
-					}
-
-					// Detengo el timeout
-					delete_ticker(timeout_USB);
-					read_buffer_USB.read_state = 0;
-				}
-
-				break;
-		}
-
-		read_buffer_USB.read_index++;
-	}
-}
-
-void read_data_UDP(void)
-{
-	if (read_buffer_UDP.read_index != read_buffer_UDP.write_index)
-	{
-		switch (read_buffer_UDP.read_state)
-		{
-			case 0:
-				if (read_buffer_UDP.data[read_buffer_UDP.read_index] != '\r' &&
-						read_buffer_UDP.data[read_buffer_UDP.read_index] != '\n')
-				{
-					new_ticker_ms(timeout_UDP, 100, LOW_PRIORITY);
-
-					wifi.cmd_init = read_buffer_UDP.read_index;
-
-					read_buffer_UDP.read_state = 1;
-				}
-
-				break;
-
-			case 1:
-				if (read_buffer_UDP.data[read_buffer_UDP.read_index] == '\r' ||
-						read_buffer_UDP.data[read_buffer_UDP.read_index] == '\n')
-				{
-					delete_ticker(timeout_UDP);
-
-					wifi.cmd_end = read_buffer_UDP.read_index - 1;
-
-					read_buffer_UDP.read_state = 2;
-				}
-
-				break;
-
-			case 2:
-				read_buffer_UDP.read_state = 0;
-
-				if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_end, (uint8_t *)("AT")))
-				{
-					wifi.cmd = WIFI_COMMAND_AT;
-
-					read_buffer_UDP.read_state = 3;
-				}
-
-				else if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_end, (uint8_t *)("AT+CWMODE_CUR=1")))
-				{
-					wifi.cmd = WIFI_COMMAND_CWMODE_CUR_1;
-
-					read_buffer_UDP.read_state = 3;
-				}
-
-				else if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_init + 12, (uint8_t *)("AT+CWJAP_CUR=")))
-				{
-					wifi.cmd = WIFI_COMMAND_CWJAP_CUR;
-
-					read_buffer_UDP.read_state = 0;
-				}
-
-				else if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_end, (uint8_t *)("WIFI CONNECTED")))
-				{
-					wifi.status = WIFI_STATUS_CONNECTED;
-
-					read_buffer_UDP.read_state = 0;
-				}
-
-				else if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_end, (uint8_t *)("WIFI GOT IP")))
-				{
-					wifi.status = WIFI_STATUS_GOT_IP;
-
-					read_buffer_UDP.read_state = 0;
-				}
-
-				else if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_init + 13, (uint8_t *)("AT+CIPSTA_CUR=")))
-				{
-					wifi.cmd = WIFI_COMMAND_CIPSTA_CUR;
-
-					read_buffer_UDP.read_state = 3;
-				}
-
-
-				break;
-
-			case 3:
-				if (read_buffer_UDP.data[read_buffer_UDP.read_index] != '\r' &&
-						read_buffer_UDP.data[read_buffer_UDP.read_index] != '\n')
-				{
-					new_ticker_ms(timeout_UDP, 100, LOW_PRIORITY);
-
-					wifi.cmd_init = read_buffer_UDP.read_index;
-
-					read_buffer_UDP.read_state = 4;
-				}
-
-				break;
-
-			case 4:
-				if (read_buffer_UDP.data[read_buffer_UDP.read_index] == '\r' ||
-						read_buffer_UDP.data[read_buffer_UDP.read_index] == '\n')
-				{
-					delete_ticker(timeout_UDP);
-
-					wifi.cmd_end = read_buffer_UDP.read_index - 1;
-
-					read_buffer_UDP.read_state = 5;
-				}
-
-				break;
-
-			case 5:
-				switch (wifi.cmd)
-				{
-					case WIFI_COMMAND_AT:
-						if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_end, (uint8_t *)("OK")))
-						{
-							wifi.status = WIFI_STATUS_INIT;
-						}
-
-						else if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_end, (uint8_t *)("ERROR")))
-						{
-							wifi.status = WIFI_STATUS_NO_INIT;
-						}
-
-						break;
-
-					case WIFI_COMMAND_CWMODE_CUR_1:
-						if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_end, (uint8_t *)("OK")))
-						{
-							wifi.status = WIFI_STATUS_STATION;
-						}
-
-						else if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_end, (uint8_t *)("ERROR")))
-						{
-							wifi.status = WIFI_STATUS_NO_INIT;
-						}
-
-						break;
-
-					case WIFI_COMMAND_CIPSTA_CUR:
-						if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_end, (uint8_t *)("OK")))
-						{
-							wifi.status = WIFI_STATUS_SET_IP;
-						}
-
-						else if (command_at((uint8_t *)(read_buffer_UDP.data), wifi.cmd_init, wifi.cmd_end, (uint8_t *)("ERROR")))
-						{
-							wifi.status = WIFI_STATUS_NO_INIT;
-						}
-
-						break;
-
-					read_buffer_UDP.read_state = 0;
-				}
-
-				break;
-		}
-
-		read_buffer_UDP.read_index++;
-	}
-}
-
-void write_data_USB(void)
-{
-	if (write_buffer_USB.read_index != write_buffer_USB.write_index)
-	{
-		if (CDC_Transmit_FS((uint8_t *)(&write_buffer_USB.data[write_buffer_USB.read_index]), 1) == USBD_OK)
-		{
-			write_buffer_USB.read_index++;
-		}
-	}
-}
-
-void write_data_UDP(void)
-{
-	if (write_buffer_UDP.read_index != write_buffer_UDP.write_index)
-	{
-		if (HAL_UART_Transmit_IT(&huart3, (uint8_t *)(&write_buffer_UDP.data[write_buffer_UDP.read_index]), 1) == HAL_OK)
-		{
-			write_buffer_UDP.read_index++;
-		}
-	}
-}
-
-uint8_t xor(uint8_t cmd, uint8_t *payload, uint8_t payload_init, uint8_t payload_length)
-{
-	uint8_t xor = 0x00;
-
-	xor ^= 'U';
-	xor ^= 'N';
-	xor ^= 'E';
-	xor ^= 'R';
-	xor ^= payload_length;
-	xor ^= ':';
-
-	xor ^= cmd;
-
-	for (uint8_t i = payload_init ; i < payload_init + payload_length ; i++)
-	{
-		xor ^= payload[i];
-	}
-
-	return xor;
-}
-
-uint8_t command_at(uint8_t *cmd, uint8_t init, uint8_t end, uint8_t *cmd_cmp)
-{
-	uint8_t i = init;
-	uint8_t j = 0;
-
-	while (i != (end + 1))
-	{
-		if (cmd[i] != cmd_cmp[j])
-		{
-			return 0;
-		}
-
-		i++;
-		j++;
-	}
-
-	return 1;
-}
-
-void esp_init(void)
+/*void esp_init(void)
 {
 	switch (wifi.status)
 	{
 		case WIFI_STATUS_BUSY:
 
+
 			break;
 
 		case WIFI_STATUS_NO_INIT:
-			write_cmd_AT((uint8_t *)("AT"), 2);
+			write_buffer(&write_buffer_UDP, (uint8_t *)("AT"), 2);
+			write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
 
 			wifi.status = WIFI_STATUS_BUSY;
 
 			break;
 
 		case WIFI_STATUS_INIT:
-			write_cmd_AT((uint8_t *)("AT+CWMODE_CUR=1"), 15);
+			write_buffer(&write_buffer_UDP, (uint8_t *)("AT+CWMODE_CUR=1"), 15);
+			write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
 
 			wifi.status = WIFI_STATUS_BUSY;
 
 			break;
 
 		case WIFI_STATUS_STATION:
-			write_cmd_AT((uint8_t *)("AT+CWJAP_CUR=\"Gabi-RED\",\"GabiAndi26040102.\""), 43);
+			write_buffer(&write_buffer_UDP, (uint8_t *)("AT+CWJAP_CUR=\"Gabi-RED\",\"GabiAndi26040102.\""), 43);
+			write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
 
 			wifi.status = WIFI_STATUS_BUSY;
 
 			break;
 
 		case WIFI_STATUS_CONNECTED:
-
 			wifi.status = WIFI_STATUS_BUSY;
 
 			break;
 
 		case WIFI_STATUS_GOT_IP:
-			//write_cmd_AT((uint8_t *)("AT+CIPSTA_CUR=\"10.0.0.10\""), 25);
+			write_buffer(&write_buffer_UDP, (uint8_t *)("AT+CIPSTA_CUR=\"10.0.0.10\""), 25);
+			write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
 
-			change_ticker_ms(led_blink, LED_OK);
-
-			delete_ticker(esp_init);
-
-			//wifi.status = WIFI_STATUS_BUSY;
+			wifi.status = WIFI_STATUS_BUSY;
 
 			break;
 
 		case WIFI_STATUS_SET_IP:
+			write_buffer(&write_buffer_UDP, (uint8_t *)("AT+CIPSTATUS"), 12);
+			write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
+
+			wifi.status = WIFI_STATUS_BUSY;
+
+			break;
+
+		case WIFI_STATUS_READY:
 			change_ticker_ms(led_blink, LED_OK);
 
 			delete_ticker(esp_init);
 
 			break;
 	}
+}*/
+
+void usbcdc_write_pending(void)
+{
+	if (usbcdc_buffer_write.read_index != usbcdc_buffer_write.write_index)
+	{
+		if (CDC_Transmit_FS((uint8_t *)(&usbcdc_buffer_write.data[usbcdc_buffer_write.read_index]), 1) == USBD_OK)
+		{
+			usbcdc_buffer_write.read_index++;
+		}
+	}
 }
 
-void timeout_USB(void)
+void esp_write_pending(void)
 {
-	delete_ticker(timeout_USB);
-
-	read_buffer_USB.read_state = 0;
-}
-
-void timeout_UDP(void)
-{
-	delete_ticker(timeout_UDP);
-
-	read_buffer_UDP.read_state = 0;
+	if (esp_buffer_write.read_index != esp_buffer_write.write_index)
+	{
+		if (HAL_UART_Transmit_IT(&huart3, (uint8_t *)(&esp_buffer_write.data[esp_buffer_write.read_index]), 1) == HAL_OK)
+		{
+			esp_buffer_write.read_index++;
+		}
+	}
 }
 
 void led_blink(void)
@@ -793,13 +322,11 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-	read_buffer_UDP.data[read_buffer_UDP.write_index] = byte_receibe_usart;
-	read_buffer_UDP.write_index++;
+	esp_write_buffer_read((uint8_t *)(&byte_receibe_usart), 1);
 
-	if (wifi.debug == WIFI_DEBUG_ON)
+	if (debug == DEBUG_ON)
 	{
-		write_buffer_USB.data[write_buffer_USB.write_index] = byte_receibe_usart;
-		write_buffer_USB.write_index++;
+		usbcdc_write_buffer_write((uint8_t *)(&byte_receibe_usart), 1);
 	}
 
 	HAL_UART_Receive_IT(&huart3, (uint8_t *)(&byte_receibe_usart), 1);

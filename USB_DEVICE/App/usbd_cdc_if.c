@@ -95,10 +95,7 @@ uint8_t UserRxBufferFS[APP_RX_DATA_SIZE];
 uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
 
 /* USER CODE BEGIN PRIVATE_VARIABLES */
-extern read_ring_buffer_t read_buffer_USB;
-extern write_ring_buffer_t write_buffer_USB;
 
-extern uint8_t debug;
 /* USER CODE END PRIVATE_VARIABLES */
 
 /**
@@ -263,11 +260,7 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
   /* USER CODE BEGIN 6 */
-	for (uint32_t i = 0 ; i < *Len ; i++)
-	{
-		read_buffer_USB.data[read_buffer_USB.write_index] = Buf[i];
-		read_buffer_USB.write_index++;
-	}
+  usbcdc_write_buffer_read(Buf, (uint8_t)(*Len));
 
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
   USBD_CDC_ReceivePacket(&hUsbDeviceFS);

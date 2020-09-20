@@ -1,19 +1,18 @@
 #ifndef INC_TICKER_H_
 #define INC_TICKER_H_
 
-#include "stm32f1xx.h"
-
-#include "stddef.h"
-#include "stdlib.h"
+#include <stddef.h>
+#include <stdlib.h>
+#include <inttypes.h>
 
 // Definiciones
-#define MAX_TICKERS_USE                 				6	// Ticker como maximo
+#define TICKER_MAX_USE                 					10	// Ticker como maximo
 
-#define LOW_PRIORITY									0
-#define HIGH_PRIORITY									1
+#define TICKER_LOW_PRIORITY								0
+#define TICKER_HIGH_PRIORITY							1
 
 // Typedef
-typedef void(*ptrfun)(void);
+typedef void(*tick_ptrfun)(void);
 
 // Estructuras
 typedef struct
@@ -25,22 +24,22 @@ typedef struct
 
 	uint8_t priority;
 
-	ptrfun function;
+	tick_ptrfun function;
 }ticker_t;
 
 // Variables
-ticker_t *user_tickers[MAX_TICKERS_USE];
+ticker_t *tickers_user[TICKER_MAX_USE];
 
 // Prototipos de funcion
-void init_ticker_core(void);
+void ticker_init_core(void);
 
-void new_ticker_ms(ptrfun function, uint32_t ms, uint8_t priority);
-void delete_ticker(ptrfun function);
+void ticker_new(tick_ptrfun function, uint32_t ms, uint8_t priority);
+void ticker_delete(tick_ptrfun function);
 
-void change_ticker_ms(ptrfun function, uint32_t ms);
+void ticker_change_period(tick_ptrfun function, uint32_t ms);
 
-void change_ticker_priority(ptrfun function, uint8_t priority);
+void ticker_change_priority(tick_ptrfun function, uint8_t priority);
 
-void execute_ticker_pending(void);
+void ticker_execute_pending(void);
 
 #endif /* INC_TICKER_H_ */
