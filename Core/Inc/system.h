@@ -16,9 +16,6 @@
 
 uint8_t debug;
 
-//char *ip_mcu = "192.168.0.100";
-//char *ip_pc = "192.168.0.17";
-
 void system_init(void);
 
 uint8_t xor(uint8_t cmd, uint8_t *payload, uint8_t payload_init, uint8_t payload_length);

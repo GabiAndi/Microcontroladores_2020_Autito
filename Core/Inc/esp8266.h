@@ -4,22 +4,19 @@
 #include "system.h"
 
 // Definiciones
-#define WIFI_STATUS_NO_INIT				0
-#define WIFI_STATUS_INIT				1
-#define WIFI_STATUS_STATION				2
-#define WIFI_STATUS_CONNECTED			3
-#define WIFI_STATUS_DISCONNECTED		4
-#define WIFI_STATUS_GOT_IP				5
-#define WIFI_STATUS_SET_IP				6
-#define WIFI_STATUS_READY				7
-#define WIFI_STATUS_BUSY				254
+#define ESP_STATUS_NO_INIT					0
+#define ESP_STATUS_INIT						1
+#define ESP_STATUS_STATION_OK				2
+#define ESP_STATUS_CONNECTED				3
+#define ESP_STATUS_DISCONNECTED				4
+#define ESP_STATUS_CONNECTED_GOT_IP			5
+#define ESP_STATUS_SET_IP					6
 
-#define WIFI_COMMAND_ERROR				0
-#define WIFI_COMMAND_AT					1
-#define WIFI_COMMAND_CWMODE_CUR_1		2
-#define WIFI_COMMAND_CWJAP_CUR			3
-#define WIFI_COMMAND_CIPSTA_CUR			4
-#define WIFI_COMMAND_CIPSTATUS			5
+#define ESP_COMMAND_IDLE					0
+#define ESP_COMMAND_AT						1
+#define ESP_COMMAND_AT_CWMODE				2
+#define ESP_COMMAND_AT_CWJAP				3
+#define ESP_COMMAND_AT_CIPSTA				4
 
 // Typedef
 typedef struct
@@ -43,6 +40,7 @@ typedef struct
 typedef struct
 {
 	uint8_t status;
+	uint8_t read_state;
 
 	uint8_t *ip_mcu;
 	uint8_t *ip_pc;
@@ -74,7 +72,7 @@ void esp_send_cmd(uint8_t cmd, uint8_t *payload, uint8_t length);
 void esp_read_pending(void);
 void esp_write_pending(void);
 
-uint8_t command_at(uint8_t *cmd, uint8_t init, uint8_t end, uint8_t *cmd_cmp);
+uint8_t esp_at_cmp(uint8_t *at, uint8_t at_init, uint8_t at_end, uint8_t *at_cmp, uint8_t at_cmp_length);
 
 void esp_timeout(void);
 

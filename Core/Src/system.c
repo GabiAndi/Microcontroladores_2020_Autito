@@ -6,10 +6,6 @@ void system_init(void)
 
 	usbcdc_init();	// Inicia la configuracion del USB
 	esp_init();	// Inicia la configuracion del ESP
-	/*wifi.status = WIFI_STATUS_NO_INIT;
-	wifi.ip_mcu = ip_mcu;
-	wifi.ip_pc = ip_pc;
-	wifi.debug = WIFI_DEBUG_OFF;*/
 }
 
 uint8_t xor(uint8_t cmd, uint8_t *payload, uint8_t payload_init, uint8_t payload_length)

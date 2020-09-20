@@ -44,7 +44,8 @@
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
-
+char *ip_mcu = "10.0.0.10";
+char *ip_pc = "10.0.0.100";
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -92,6 +93,9 @@ int main(void)
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
   system_init();	// Inicia la configuración del sistema
+
+  esp_manager.ip_mcu = (uint8_t *)ip_mcu;
+  esp_manager.ip_pc = (uint8_t *)ip_pc;
 
   ticker_new(led_blink, LED_FAIL, TICKER_LOW_PRIORITY);	// Ticker para el led de estado
 
@@ -312,6 +316,11 @@ void esp_write_pending(void)
 
 void led_blink(void)
 {
+	if (esp_manager.status == ESP_STATUS_SET_IP)
+	{
+		ticker_change_period(led_blink, LED_OK);
+	}
+
 	HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 }
 
