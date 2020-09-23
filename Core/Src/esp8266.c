@@ -1,5 +1,17 @@
 #include "esp8266.h"
 
+// Variables
+__attribute__ ((__section__(".user_data_flash"))) flash_data_t flash_user;
+
+// Variables
+esp_buffer_read_t esp_buffer_read;
+esp_buffer_write_t esp_buffer_write;
+
+esp_manager_t esp_manager;
+
+// Byte temporal de recepción de datos
+volatile uint8_t byte_receibe_usart;
+
 void esp_init(void)
 {
 	// Inicializacion de los buffers
@@ -47,21 +59,16 @@ void esp_send_at(uint8_t *cmd, uint8_t length)
 
 void esp_send_cmd(uint8_t cmd, uint8_t *payload, uint8_t length)
 {
-	// Cabecera AT
-	//write_buffer(&write_buffer_UDP, (uint8_t *)("AT+CIPSEND="), 11);
-	//write_buffer(&write_buffer_UDP, 2, 1);
-	//write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
-
 	// Cabecera UNER
-	//write_buffer(&write_buffer_UDP, (uint8_t *)("UNER"), 4);
-	//write_buffer(&write_buffer_UDP, &length, 1);
-	//write_buffer(&write_buffer_UDP, (uint8_t *)(":"), 1);
-	//write_buffer(&write_buffer_UDP, &cmd, 1);
-	//write_buffer(&write_buffer_UDP, payload, length);
+	esp_write_buffer_write((uint8_t *)("UNER"), 4);
+	esp_write_buffer_write(&length, 1);
+	esp_write_buffer_write((uint8_t *)(":"), 1);
+	esp_write_buffer_write(&cmd, 1);
+	esp_write_buffer_write(payload, length);
 
-	//uint8_t checksum = xor(cmd, payload, 0, length);
+	uint8_t checksum = xor(cmd, payload, 0, length);
 
-	//write_buffer(&write_buffer_UDP, &checksum, 1);
+	esp_write_buffer_write(&checksum, 1);
 }
 
 void esp_read_pending(void)
@@ -376,12 +383,10 @@ void esp_connect_to_ap(void)
 				break;
 
 			case ESP_STATUS_STATION_OK:
-				//esp_send_at((uint8_t *)("AT+CWJAP_CUR=\"Gabi-RED\",\"GabiAndi26040102.\""), 43);
-
 				esp_write_buffer_write((uint8_t *)("AT+CWJAP_CUR=\""), 14);
-				esp_write_buffer_write(esp_manager.ssid, esp_manager.ssid_length);
+				esp_write_buffer_write(flash_user.ssid, flash_user.ssid_length);
 				esp_write_buffer_write((uint8_t *)("\",\""), 3);
-				esp_write_buffer_write(esp_manager.psw, esp_manager.psw_length);
+				esp_write_buffer_write(flash_user.psw, flash_user.psw_length);
 				esp_write_buffer_write((uint8_t *)("\""), 1);
 				esp_write_buffer_write((uint8_t *)("\r\n"), 2);
 
@@ -392,24 +397,20 @@ void esp_connect_to_ap(void)
 				break;
 
 			case ESP_STATUS_CONNECTED_GOT_IP:
-				//esp_send_at((uint8_t *)("AT+CIPSTA_CUR=\"10.0.0.10\""), 25);
-
 				esp_write_buffer_write((uint8_t *)("AT+CIPSTA_CUR=\""), 15);
-				esp_write_buffer_write(esp_manager.ip_mcu, esp_manager.ip_mcu_length);
+				esp_write_buffer_write(flash_user.ip_mcu, flash_user.ip_mcu_length);
 				esp_write_buffer_write((uint8_t *)("\""), 1);
 				esp_write_buffer_write((uint8_t *)("\r\n"), 2);
 
 				break;
 
 			case ESP_STATUS_SET_IP:
-				//esp_send_at((uint8_t *)("AT+CIPSTART=\"UDP\",\"10.0.0.100\",50000,50000"), 42);
-
 				esp_write_buffer_write((uint8_t *)("AT+CIPSTART=\"UDP\",\""), 19);
-				esp_write_buffer_write(esp_manager.ip_pc, esp_manager.ip_pc_length);
+				esp_write_buffer_write(flash_user.ip_pc, flash_user.ip_pc_length);
 				esp_write_buffer_write((uint8_t *)("\","), 2);
-				esp_write_buffer_write(esp_manager.port, esp_manager.port_length);
+				esp_write_buffer_write(flash_user.port, flash_user.port_length);
 				esp_write_buffer_write((uint8_t *)(","), 1);
-				esp_write_buffer_write(esp_manager.port, esp_manager.port_length);
+				esp_write_buffer_write(flash_user.port, flash_user.port_length);
 				esp_write_buffer_write((uint8_t *)("\r\n"), 2);
 
 				break;

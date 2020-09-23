@@ -61,35 +61,11 @@ typedef struct
 	uint8_t status;
 	uint8_t read_state;
 
-	uint8_t *ip_mcu;
-	uint8_t ip_mcu_length;
-
-	uint8_t *ip_pc;
-	uint8_t ip_pc_length;
-
-	uint8_t *ssid;
-	uint8_t ssid_length;
-
-	uint8_t *psw;
-	uint8_t psw_length;
-
-	uint8_t *port;
-	uint8_t port_length;
-
 	uint8_t cmd;
 
 	uint8_t cmd_init;
 	uint8_t cmd_end;
 }esp_manager_t;
-
-// Varialbles
-esp_buffer_read_t esp_buffer_read;
-esp_buffer_write_t esp_buffer_write;
-
-esp_manager_t esp_manager;
-
-// Byte temporal de recepción de datos
-volatile uint8_t byte_receibe_usart;
 
 // Funciones
 void esp_init(void);

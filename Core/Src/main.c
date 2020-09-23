@@ -23,6 +23,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "stm32f1xx_hal_flash.h"
+#include "stm32f1xx_hal_flash_ex.h"
+
 #include "system.h"
 /* USER CODE END Includes */
 
@@ -44,20 +47,7 @@
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
-char *ip_mcu = "10.0.0.10";
-uint8_t ip_mcu_length = 9;
-
-char *ip_pc = "10.0.0.100";
-uint8_t ip_pc_length = 10;
-
-char *ssid = "Gabi-RED";
-uint8_t ssid_length = 8;
-
-char *psw = "GabiAndi26040102.";
-uint8_t psw_length = 17;
-
-char *port = "50000";
-uint8_t port_length = 5;
+extern __attribute__ ((__section__(".user_data_flash"))) flash_data_t flash_user;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -108,21 +98,6 @@ int main(void)
 
   system_init();	// Inicia la configuración del sistema
 
-  esp_manager.ip_mcu = (uint8_t *)ip_mcu;
-  esp_manager.ip_mcu_length = ip_mcu_length;
-
-  esp_manager.ip_pc = (uint8_t *)ip_pc;
-  esp_manager.ip_pc_length = ip_pc_length;
-
-  esp_manager.ssid = (uint8_t *)ssid;
-  esp_manager.ssid_length = ssid_length;
-
-  esp_manager.psw = (uint8_t *)psw;
-  esp_manager.psw_length = psw_length;
-
-  esp_manager.port = (uint8_t *)port;
-  esp_manager.port_length = port_length;
-
   ticker_new(led_blink, LED_FAIL, TICKER_LOW_PRIORITY);	// Ticker para el led de estado
 
   HAL_UART_Receive_IT(&huart3, (uint8_t *)(&byte_receibe_usart), 1);
@@ -130,9 +105,6 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  // Configuracion inicial del modulo WiFi por defecto
-  //new_ticker_ms(esp_init, 2000, LOW_PRIORITY);
-
   while (1)
   {
 	  ticker_execute_pending();

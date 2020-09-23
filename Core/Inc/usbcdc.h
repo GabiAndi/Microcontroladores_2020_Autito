@@ -23,10 +23,6 @@ typedef struct
 	volatile uint8_t write_index;
 }usbcdc_buffer_write_t;
 
-// Variables
-usbcdc_buffer_read_t usbcdc_buffer_read;
-usbcdc_buffer_write_t usbcdc_buffer_write;
-
 // Funciones
 void usbcdc_init(void);
 

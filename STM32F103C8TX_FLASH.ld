@@ -34,10 +34,17 @@ _Min_Heap_Size = 0x200 ;	/* required amount of heap  */
 _Min_Stack_Size = 0x400 ;	/* required amount of stack */
 
 /* Memories definition */
-MEMORY
+/*MEMORY
 {
   RAM    (xrw)    : ORIGIN = 0x20000000,   LENGTH = 20K
   FLASH    (rx)    : ORIGIN = 0x8000000,   LENGTH = 64K
+}*/
+
+MEMORY
+{
+  RAM    (xrw)    : ORIGIN = 0x20000000,   LENGTH = 20K
+  FLASH    (rx)    : ORIGIN = 0x8000000,   LENGTH = 63K
+  USER_FLASH    (xrw)    : ORIGIN = 0x800FC00,   LENGTH = 1K
 }
 
 /* Sections */
@@ -135,6 +142,15 @@ SECTIONS
     _edata = .;        /* define a global symbol at data end */
     
   } >RAM AT> FLASH
+  
+  /* Datos almacenados en la flash */
+  .user_data_flash :
+  {
+    . = ALIGN(4);
+    KEEP(*(.user_data_flash))
+    KEEP(*(.user_data_flash*))
+    . = ALIGN(4);
+  } >USER_FLASH
 
   /* Uninitialized data section into "RAM" Ram type memory */
   . = ALIGN(4);

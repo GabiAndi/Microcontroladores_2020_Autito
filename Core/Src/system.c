@@ -1,5 +1,8 @@
 #include "system.h"
 
+// Variables
+uint8_t debug;
+
 void system_init(void)
 {
 	ticker_init_core();	// Inicia la configuracion de los tickers
