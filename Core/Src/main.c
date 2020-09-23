@@ -45,7 +45,19 @@ UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
 char *ip_mcu = "10.0.0.10";
+uint8_t ip_mcu_length = 9;
+
 char *ip_pc = "10.0.0.100";
+uint8_t ip_pc_length = 10;
+
+char *ssid = "Gabi-RED";
+uint8_t ssid_length = 8;
+
+char *psw = "GabiAndi26040102.";
+uint8_t psw_length = 17;
+
+char *port = "50000";
+uint8_t port_length = 5;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -97,7 +109,19 @@ int main(void)
   system_init();	// Inicia la configuración del sistema
 
   esp_manager.ip_mcu = (uint8_t *)ip_mcu;
+  esp_manager.ip_mcu_length = ip_mcu_length;
+
   esp_manager.ip_pc = (uint8_t *)ip_pc;
+  esp_manager.ip_pc_length = ip_pc_length;
+
+  esp_manager.ssid = (uint8_t *)ssid;
+  esp_manager.ssid_length = ssid_length;
+
+  esp_manager.psw = (uint8_t *)psw;
+  esp_manager.psw_length = psw_length;
+
+  esp_manager.port = (uint8_t *)port;
+  esp_manager.port_length = port_length;
 
   ticker_new(led_blink, LED_FAIL, TICKER_LOW_PRIORITY);	// Ticker para el led de estado
 
@@ -255,6 +279,11 @@ void esp_write_pending(void)
 
 void led_blink(void)
 {
+	if (esp_manager.status == ESP_STATUS_UDP_READY)
+	{
+		ticker_change_period(led_blink, 1000);
+	}
+
 	HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 }
 

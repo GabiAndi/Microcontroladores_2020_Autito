@@ -45,6 +45,22 @@ void ticker_delete(tick_ptrfun function)
 	}
 }
 
+uint16_t ticker_calls(tick_ptrfun function)
+{
+	for (uint8_t i = 0 ; i < TICKER_MAX_USE ; i++)
+	{
+		if (tickers_user[i] != NULL)
+		{
+			if (tickers_user[i]->function == function)
+			{
+				return (uint16_t)(tickers_user[i]->calls);
+			}
+		}
+	}
+
+	return 0;
+}
+
 void ticker_change_period(tick_ptrfun function, uint32_t ms)
 {
 	for (uint8_t i = 0 ; i < TICKER_MAX_USE ; i++)

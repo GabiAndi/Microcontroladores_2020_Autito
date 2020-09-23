@@ -62,7 +62,19 @@ typedef struct
 	uint8_t read_state;
 
 	uint8_t *ip_mcu;
+	uint8_t ip_mcu_length;
+
 	uint8_t *ip_pc;
+	uint8_t ip_pc_length;
+
+	uint8_t *ssid;
+	uint8_t ssid_length;
+
+	uint8_t *psw;
+	uint8_t psw_length;
+
+	uint8_t *port;
+	uint8_t port_length;
 
 	uint8_t cmd;
 

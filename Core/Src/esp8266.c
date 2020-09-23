@@ -17,7 +17,7 @@ void esp_init(void)
 
 	//esp_send_at((uint8_t *)("AT+CIPSTATUS"), 12);
 
-	//ticker_new(esp_connect_to_ap, 200, TICKER_LOW_PRIORITY);
+	ticker_new(esp_connect_to_ap, 200, TICKER_LOW_PRIORITY);
 }
 
 void esp_write_buffer_write(uint8_t *data, uint8_t length)
@@ -361,61 +361,68 @@ void esp_timeout(void)
 
 void esp_connect_to_ap(void)
 {
-	/*if (esp_manager.cmd == ESP_COMMAND_IDLE)
+	if (esp_manager.cmd == ESP_COMMAND_IDLE)
 	{
-		switch (wifi.status)
+		switch (esp_manager.status)
 		{
-			case WIFI_STATUS_NO_INIT:
-				write_buffer(&write_buffer_UDP, (uint8_t *)("AT"), 2);
-				write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
-
-				wifi.status = WIFI_STATUS_BUSY;
+			case ESP_STATUS_NO_INIT:
+				esp_send_at((uint8_t *)("AT"), 2);
 
 				break;
 
-			case WIFI_STATUS_INIT:
-				write_buffer(&write_buffer_UDP, (uint8_t *)("AT+CWMODE_CUR=1"), 15);
-				write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
-
-				wifi.status = WIFI_STATUS_BUSY;
+			case ESP_STATUS_INIT:
+				esp_send_at((uint8_t *)("AT+CWMODE_CUR=1"), 15);
 
 				break;
 
-			case WIFI_STATUS_STATION:
-				write_buffer(&write_buffer_UDP, (uint8_t *)("AT+CWJAP_CUR=\"Gabi-RED\",\"GabiAndi26040102.\""), 43);
-				write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
+			case ESP_STATUS_STATION_OK:
+				//esp_send_at((uint8_t *)("AT+CWJAP_CUR=\"Gabi-RED\",\"GabiAndi26040102.\""), 43);
 
-				wifi.status = WIFI_STATUS_BUSY;
-
-				break;
-
-			case WIFI_STATUS_CONNECTED:
-				wifi.status = WIFI_STATUS_BUSY;
-
-				break;
-
-			case WIFI_STATUS_GOT_IP:
-				write_buffer(&write_buffer_UDP, (uint8_t *)("AT+CIPSTA_CUR=\"10.0.0.10\""), 25);
-				write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
-
-				wifi.status = WIFI_STATUS_BUSY;
+				esp_write_buffer_write((uint8_t *)("AT+CWJAP_CUR=\""), 14);
+				esp_write_buffer_write(esp_manager.ssid, esp_manager.ssid_length);
+				esp_write_buffer_write((uint8_t *)("\",\""), 3);
+				esp_write_buffer_write(esp_manager.psw, esp_manager.psw_length);
+				esp_write_buffer_write((uint8_t *)("\""), 1);
+				esp_write_buffer_write((uint8_t *)("\r\n"), 2);
 
 				break;
 
-			case WIFI_STATUS_SET_IP:
-				write_buffer(&write_buffer_UDP, (uint8_t *)("AT+CIPSTATUS"), 12);
-				write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
-
-				wifi.status = WIFI_STATUS_BUSY;
+			case ESP_STATUS_CONNECTED:
 
 				break;
 
-			case WIFI_STATUS_READY:
-				change_ticker_ms(led_blink, LED_OK);
+			case ESP_STATUS_CONNECTED_GOT_IP:
+				//esp_send_at((uint8_t *)("AT+CIPSTA_CUR=\"10.0.0.10\""), 25);
 
-				delete_ticker(esp_init);
+				esp_write_buffer_write((uint8_t *)("AT+CIPSTA_CUR=\""), 15);
+				esp_write_buffer_write(esp_manager.ip_mcu, esp_manager.ip_mcu_length);
+				esp_write_buffer_write((uint8_t *)("\""), 1);
+				esp_write_buffer_write((uint8_t *)("\r\n"), 2);
+
+				break;
+
+			case ESP_STATUS_SET_IP:
+				//esp_send_at((uint8_t *)("AT+CIPSTART=\"UDP\",\"10.0.0.100\",50000,50000"), 42);
+
+				esp_write_buffer_write((uint8_t *)("AT+CIPSTART=\"UDP\",\""), 19);
+				esp_write_buffer_write(esp_manager.ip_pc, esp_manager.ip_pc_length);
+				esp_write_buffer_write((uint8_t *)("\","), 2);
+				esp_write_buffer_write(esp_manager.port, esp_manager.port_length);
+				esp_write_buffer_write((uint8_t *)(","), 1);
+				esp_write_buffer_write(esp_manager.port, esp_manager.port_length);
+				esp_write_buffer_write((uint8_t *)("\r\n"), 2);
+
+				break;
+
+			case ESP_STATUS_UDP_READY:
+				ticker_delete(esp_connect_to_ap);
 
 				break;
 		}
-	}*/
+	}
+
+	if (ticker_calls(esp_connect_to_ap) > 60)
+	{
+		ticker_delete(esp_connect_to_ap);
+	}
 }

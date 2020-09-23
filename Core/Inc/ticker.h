@@ -36,6 +36,8 @@ void ticker_init_core(void);
 void ticker_new(tick_ptrfun function, uint32_t ms, uint8_t priority);
 void ticker_delete(tick_ptrfun function);
 
+uint16_t ticker_calls(tick_ptrfun function);
+
 void ticker_change_period(tick_ptrfun function, uint32_t ms);
 
 void ticker_change_priority(tick_ptrfun function, uint8_t priority);
