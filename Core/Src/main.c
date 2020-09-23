@@ -92,6 +92,8 @@ int main(void)
   MX_USB_DEVICE_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
+  HAL_Delay(1000);
+
   system_init();	// Inicia la configuración del sistema
 
   esp_manager.ip_mcu = (uint8_t *)ip_mcu;
@@ -229,69 +231,6 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-/*void esp_init(void)
-{
-	switch (wifi.status)
-	{
-		case WIFI_STATUS_BUSY:
-
-
-			break;
-
-		case WIFI_STATUS_NO_INIT:
-			write_buffer(&write_buffer_UDP, (uint8_t *)("AT"), 2);
-			write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
-
-			wifi.status = WIFI_STATUS_BUSY;
-
-			break;
-
-		case WIFI_STATUS_INIT:
-			write_buffer(&write_buffer_UDP, (uint8_t *)("AT+CWMODE_CUR=1"), 15);
-			write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
-
-			wifi.status = WIFI_STATUS_BUSY;
-
-			break;
-
-		case WIFI_STATUS_STATION:
-			write_buffer(&write_buffer_UDP, (uint8_t *)("AT+CWJAP_CUR=\"Gabi-RED\",\"GabiAndi26040102.\""), 43);
-			write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
-
-			wifi.status = WIFI_STATUS_BUSY;
-
-			break;
-
-		case WIFI_STATUS_CONNECTED:
-			wifi.status = WIFI_STATUS_BUSY;
-
-			break;
-
-		case WIFI_STATUS_GOT_IP:
-			write_buffer(&write_buffer_UDP, (uint8_t *)("AT+CIPSTA_CUR=\"10.0.0.10\""), 25);
-			write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
-
-			wifi.status = WIFI_STATUS_BUSY;
-
-			break;
-
-		case WIFI_STATUS_SET_IP:
-			write_buffer(&write_buffer_UDP, (uint8_t *)("AT+CIPSTATUS"), 12);
-			write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
-
-			wifi.status = WIFI_STATUS_BUSY;
-
-			break;
-
-		case WIFI_STATUS_READY:
-			change_ticker_ms(led_blink, LED_OK);
-
-			delete_ticker(esp_init);
-
-			break;
-	}
-}*/
-
 void usbcdc_write_pending(void)
 {
 	if (usbcdc_buffer_write.read_index != usbcdc_buffer_write.write_index)
@@ -316,11 +255,6 @@ void esp_write_pending(void)
 
 void led_blink(void)
 {
-	if (esp_manager.status == ESP_STATUS_SET_IP)
-	{
-		ticker_change_period(led_blink, LED_OK);
-	}
-
 	HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 }
 

@@ -14,6 +14,10 @@ void esp_init(void)
 	esp_manager.read_state = 0;
 	esp_manager.cmd = ESP_COMMAND_IDLE;
 	esp_manager.status = ESP_STATUS_NO_INIT;
+
+	//esp_send_at((uint8_t *)("AT+CIPSTATUS"), 12);
+
+	//ticker_new(esp_connect_to_ap, 200, TICKER_LOW_PRIORITY);
 }
 
 void esp_write_buffer_write(uint8_t *data, uint8_t length)
@@ -108,30 +112,81 @@ void esp_read_pending(void)
 					esp_manager.cmd = ESP_COMMAND_AT_CWJAP;
 				}
 
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("+CWJAP:1"), 8))
+				{
+					esp_manager.status = ESP_STATUS_ERROR_CON_TIMEOUT;
+				}
+
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("+CWJAP:2"), 8))
+				{
+					esp_manager.status = ESP_STATUS_ERROR_CON_PSW;
+				}
+
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("+CWJAP:3"), 8))
+				{
+					esp_manager.status = ESP_STATUS_ERROR_CON_NO_AP;
+				}
+
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("+CWJAP:4"), 8))
+				{
+					esp_manager.status = ESP_STATUS_ERROR_CON_FAIL;
+				}
+
 				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("WIFI CONNECTED"), 14))
 				{
 					esp_manager.status = ESP_STATUS_CONNECTED;
-
-					usbcdc_send_cmd(0x00, NULL, 0x00);
 				}
 
 				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("WIFI GOT IP"), 11))
 				{
 					esp_manager.status = ESP_STATUS_CONNECTED_GOT_IP;
-
-					usbcdc_send_cmd(0x00, NULL, 0x00);
 				}
 
 				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("WIFI DISCONNECT"), 15))
 				{
 					esp_manager.status = ESP_STATUS_DISCONNECTED;
-
-					usbcdc_send_cmd(0x00, NULL, 0x00);
 				}
 
 				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_init + 13, (uint8_t *)("AT+CIPSTA_CUR="), 14))
 				{
 					esp_manager.cmd = ESP_COMMAND_AT_CIPSTA;
+				}
+
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("AT+CIPSTATUS"), 12))
+				{
+					esp_manager.cmd = ESP_COMMAND_AT_CIPSTATUS;
+				}
+
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("STATUS:2"), 8))
+				{
+					esp_manager.status = ESP_STATUS_CONNECTED_GOT_IP;
+				}
+
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("STATUS:3"), 8))
+				{
+					esp_manager.status = ESP_STATUS_UDP_READY;
+				}
+
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("STATUS:5"), 8))
+				{
+					esp_manager.status = ESP_STATUS_INIT;
+				}
+
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("AT+CIPCLOSE"), 11))
+				{
+					esp_manager.cmd = ESP_COMMAND_AT_CIPCLOSE;
+
+					esp_manager.status = ESP_STATUS_SET_IP;
+				}
+
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_init + 11, (uint8_t *)("AT+CIPSTART="), 12))
+				{
+					esp_manager.cmd = ESP_COMMAND_AT_CIPSTART;
+				}
+
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_init + 10, (uint8_t *)("AT+CIPSEND="), 11))
+				{
+					esp_manager.cmd = ESP_COMMAND_AT_CIPSEND;
 				}
 
 				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("OK"), 2))
@@ -141,29 +196,120 @@ void esp_read_pending(void)
 						case ESP_COMMAND_AT:
 							esp_manager.status = ESP_STATUS_INIT;
 
-							usbcdc_send_cmd(0x00, NULL, 0x00);
-
 							break;
 
 						case ESP_COMMAND_AT_CWMODE:
 							esp_manager.status = ESP_STATUS_STATION_OK;
 
-							usbcdc_send_cmd(0x00, NULL, 0x00);
-
 							break;
 
 						case ESP_COMMAND_AT_CWJAP:
-							usbcdc_send_cmd(0x00, NULL, 0x00);
 
 							break;
 
 						case ESP_COMMAND_AT_CIPSTA:
 							esp_manager.status = ESP_STATUS_SET_IP;
 
-							usbcdc_send_cmd(0x00, NULL, 0x00);
+							break;
+
+						case ESP_COMMAND_AT_CIPSTATUS:
+
+							break;
+
+						case ESP_COMMAND_AT_CIPCLOSE:
+
+							break;
+
+						case ESP_COMMAND_AT_CIPSTART:
+							esp_manager.status = ESP_STATUS_UDP_READY;
+
+							break;
+
+						case ESP_COMMAND_AT_CIPSEND:
+							esp_manager.status = ESP_STATUS_READY_SEND;
 
 							break;
 					}
+
+					esp_manager.cmd = ESP_COMMAND_IDLE;
+				}
+
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("ERROR"), 5))
+				{
+					switch (esp_manager.cmd)
+					{
+						case ESP_COMMAND_AT:
+							esp_manager.status = ESP_STATUS_ERROR_INIT;
+
+							break;
+
+						case ESP_COMMAND_AT_CWMODE:
+							esp_manager.status = ESP_STATUS_ERROR_CWMODE;
+
+							break;
+
+						case ESP_COMMAND_AT_CIPSTA:
+							esp_manager.status = ESP_STATUS_ERROR_CIPSTA;
+
+							break;
+
+						case ESP_COMMAND_AT_CIPSTATUS:
+
+							break;
+
+						case ESP_COMMAND_AT_CIPCLOSE:
+
+							break;
+
+						case ESP_COMMAND_AT_CIPSTART:
+							esp_manager.status = ESP_STATUS_ERROR_UDP;
+
+							break;
+
+						case ESP_COMMAND_AT_CIPSEND:
+							esp_manager.status = ESP_STATUS_ERROR_CMD_SEND;
+
+							break;
+					}
+
+					esp_manager.cmd = ESP_COMMAND_IDLE;
+				}
+
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("FAIL"), 4))
+				{
+					switch (esp_manager.cmd)
+					{
+						case ESP_COMMAND_AT_CWJAP:
+
+							break;
+					}
+
+					esp_manager.cmd = ESP_COMMAND_IDLE;
+				}
+
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("ALREADY CONNECTED"), 17))
+				{
+					switch (esp_manager.cmd)
+					{
+						case ESP_COMMAND_AT_CIPSTART:
+							esp_manager.status = ESP_STATUS_UDP_READY;
+
+							break;
+					}
+
+					esp_manager.cmd = ESP_COMMAND_IDLE;
+				}
+
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("SEND OK"), 7))
+				{
+					esp_manager.status = ESP_STATUS_UDP_READY;
+
+					esp_manager.cmd = ESP_COMMAND_IDLE;
+				}
+
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("SEND FAIL"), 9))
+				{
+					esp_manager.status = ESP_STATUS_ERROR_SEND_DATA;
 
 					esp_manager.cmd = ESP_COMMAND_IDLE;
 				}
@@ -211,4 +357,65 @@ void esp_timeout(void)
 	ticker_delete(esp_timeout);
 
 	esp_manager.read_state = 0;
+}
+
+void esp_connect_to_ap(void)
+{
+	/*if (esp_manager.cmd == ESP_COMMAND_IDLE)
+	{
+		switch (wifi.status)
+		{
+			case WIFI_STATUS_NO_INIT:
+				write_buffer(&write_buffer_UDP, (uint8_t *)("AT"), 2);
+				write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
+
+				wifi.status = WIFI_STATUS_BUSY;
+
+				break;
+
+			case WIFI_STATUS_INIT:
+				write_buffer(&write_buffer_UDP, (uint8_t *)("AT+CWMODE_CUR=1"), 15);
+				write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
+
+				wifi.status = WIFI_STATUS_BUSY;
+
+				break;
+
+			case WIFI_STATUS_STATION:
+				write_buffer(&write_buffer_UDP, (uint8_t *)("AT+CWJAP_CUR=\"Gabi-RED\",\"GabiAndi26040102.\""), 43);
+				write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
+
+				wifi.status = WIFI_STATUS_BUSY;
+
+				break;
+
+			case WIFI_STATUS_CONNECTED:
+				wifi.status = WIFI_STATUS_BUSY;
+
+				break;
+
+			case WIFI_STATUS_GOT_IP:
+				write_buffer(&write_buffer_UDP, (uint8_t *)("AT+CIPSTA_CUR=\"10.0.0.10\""), 25);
+				write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
+
+				wifi.status = WIFI_STATUS_BUSY;
+
+				break;
+
+			case WIFI_STATUS_SET_IP:
+				write_buffer(&write_buffer_UDP, (uint8_t *)("AT+CIPSTATUS"), 12);
+				write_buffer(&write_buffer_UDP, (uint8_t *)("\r\n"), 2);
+
+				wifi.status = WIFI_STATUS_BUSY;
+
+				break;
+
+			case WIFI_STATUS_READY:
+				change_ticker_ms(led_blink, LED_OK);
+
+				delete_ticker(esp_init);
+
+				break;
+		}
+	}*/
 }
