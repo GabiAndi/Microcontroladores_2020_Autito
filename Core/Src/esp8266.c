@@ -1,11 +1,12 @@
 #include "esp8266.h"
 
 // Variables
-__attribute__ ((__section__(".user_data_flash"))) flash_data_t flash_user;
+extern __attribute__ ((__section__(".user_data_flash"))) flash_data_t flash_user;
 
-// Variables
 esp_buffer_read_t esp_buffer_read;
 esp_buffer_write_t esp_buffer_write;
+
+esp_buffer_write_t esp_buffer_cmd_write;
 
 esp_manager_t esp_manager;
 
@@ -22,12 +23,13 @@ void esp_init(void)
 	esp_buffer_write.read_index = 0;
 	esp_buffer_write.write_index = 0;
 
+	esp_buffer_cmd_write.read_index = 0;
+	esp_buffer_cmd_write.write_index = 0;
+
 	// Inicializacion del esp manager
 	esp_manager.read_state = 0;
 	esp_manager.cmd = ESP_COMMAND_IDLE;
 	esp_manager.status = ESP_STATUS_NO_INIT;
-
-	//esp_send_at((uint8_t *)("AT+CIPSTATUS"), 12);
 
 	ticker_new(esp_connect_to_ap, 200, TICKER_LOW_PRIORITY);
 }
@@ -38,6 +40,15 @@ void esp_write_buffer_write(uint8_t *data, uint8_t length)
 	{
 		esp_buffer_write.data[esp_buffer_write.write_index] = data[i];
 		esp_buffer_write.write_index++;
+	}
+}
+
+void esp_write_buffer_send_data_write(uint8_t *data, uint8_t length)
+{
+	for (uint8_t i = 0 ; i < length ; i++)
+	{
+		esp_buffer_cmd_write.data[esp_buffer_cmd_write.write_index] = data[i];
+		esp_buffer_cmd_write.write_index++;
 	}
 }
 
@@ -57,18 +68,18 @@ void esp_send_at(uint8_t *cmd, uint8_t length)
 	esp_write_buffer_write((uint8_t *)("\r\n"), 2);
 }
 
-void esp_send_cmd(uint8_t cmd, uint8_t *payload, uint8_t length)
+uint8_t esp_send_cmd(uint8_t cmd, uint8_t *payload, uint8_t length)
 {
 	// Cabecera UNER
-	esp_write_buffer_write((uint8_t *)("UNER"), 4);
-	esp_write_buffer_write(&length, 1);
-	esp_write_buffer_write((uint8_t *)(":"), 1);
-	esp_write_buffer_write(&cmd, 1);
-	esp_write_buffer_write(payload, length);
+	esp_write_buffer_send_data_write((uint8_t *)("UNER"), 4);
+	esp_write_buffer_send_data_write(&length, 1);
+	esp_write_buffer_send_data_write((uint8_t *)(":"), 1);
+	esp_write_buffer_send_data_write(&cmd, 1);
+	esp_write_buffer_send_data_write(payload, length);
 
 	uint8_t checksum = xor(cmd, payload, 0, length);
 
-	esp_write_buffer_write(&checksum, 1);
+	esp_write_buffer_send_data_write(&checksum, 1);
 }
 
 void esp_read_pending(void)
@@ -331,6 +342,11 @@ void esp_read_pending(void)
 }
 
 __attribute__((weak)) void esp_write_pending(void)
+{
+
+}
+
+void esp_write_send_data_pending(void)
 {
 
 }

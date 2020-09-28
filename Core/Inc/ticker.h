@@ -27,9 +27,6 @@ typedef struct
 	tick_ptrfun function;
 }ticker_t;
 
-// Variables
-ticker_t *tickers_user[TICKER_MAX_USE];
-
 // Prototipos de funcion
 void ticker_init_core(void);
 

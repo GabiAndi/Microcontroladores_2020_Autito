@@ -1,6 +1,8 @@
 #include "system.h"
 
 // Variables
+__attribute__ ((__section__(".user_data_flash"))) flash_data_t flash_user;	// Datos en flash
+
 uint8_t debug;
 
 void system_init(void)

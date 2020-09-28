@@ -2,6 +2,7 @@
 #define INC_SYSTEM_H_
 
 #include <inttypes.h>
+#include <stdio.h>
 
 #include "usbcdc.h"
 #include "esp8266.h"

@@ -4,6 +4,8 @@
 usbcdc_buffer_read_t usbcdc_buffer_read;
 usbcdc_buffer_write_t usbcdc_buffer_write;
 
+extern uint8_t debug;
+
 void usbcdc_init(void)
 {
 	// Inicializacion de los buffers

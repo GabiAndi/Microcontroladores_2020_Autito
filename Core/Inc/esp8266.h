@@ -37,6 +37,11 @@
 #define ESP_COMMAND_AT_CIPSTART				7
 #define ESP_COMMAND_AT_CIPSEND				8
 
+#define ESP_SEND_OK							0
+#define ESP_SEND_WAIT						1
+#define ESP_SEND_NOT_READY					2
+
+
 // Typedef
 typedef struct
 {
@@ -65,19 +70,23 @@ typedef struct
 
 	uint8_t cmd_init;
 	uint8_t cmd_end;
+
+	uint8_t send_data_length;
 }esp_manager_t;
 
 // Funciones
 void esp_init(void);
 
 void esp_write_buffer_write(uint8_t *data, uint8_t length);
+void esp_write_buffer_send_data_write(uint8_t *data, uint8_t length);
 void esp_write_buffer_read(uint8_t *data, uint8_t length);
 
 void esp_send_at(uint8_t *cmd, uint8_t length);
-void esp_send_cmd(uint8_t cmd, uint8_t *payload, uint8_t length);
+uint8_t esp_send_cmd(uint8_t cmd, uint8_t *payload, uint8_t length);
 
 void esp_read_pending(void);
 void esp_write_pending(void);
+void esp_write_send_data_pending(void);
 
 uint8_t esp_at_cmp(uint8_t *at, uint8_t at_init, uint8_t at_end, uint8_t *at_cmp, uint8_t at_cmp_length);
 

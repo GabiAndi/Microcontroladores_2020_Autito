@@ -1,5 +1,8 @@
 #include "ticker.h"
 
+// Variables
+ticker_t *tickers_user[TICKER_MAX_USE];
+
 void ticker_init_core(void)
 {
 	for (uint8_t i = 0 ; i < TICKER_MAX_USE ; i++)
