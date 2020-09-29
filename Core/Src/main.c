@@ -76,8 +76,6 @@ static void MX_USART3_UART_Init(void);
 static void MX_ADC1_Init(void);
 /* USER CODE BEGIN PFP */
 void led_blink(void);
-
-void send_data(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -125,8 +123,6 @@ int main(void)
   ticker_new(led_blink, LED_FAIL, TICKER_LOW_PRIORITY);	// Ticker para el led de estado
 
   HAL_UART_Receive_IT(&huart3, (uint8_t *)(&byte_receibe_usart), 1);
-
-  ticker_new(send_data, 10000, TICKER_LOW_PRIORITY);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -391,11 +387,6 @@ void led_blink(void)
 	}
 
 	HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-}
-
-void send_data(void)
-{
-	esp_send_cmd(0xF0, NULL, 0x00);
 }
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)

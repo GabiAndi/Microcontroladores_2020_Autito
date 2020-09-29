@@ -90,6 +90,13 @@ void esp_send_cmd(uint8_t cmd, uint8_t *payload, uint8_t length)
 
 void esp_read_pending(void)
 {
+	/* ¡BUG!
+	 *
+	 * Cuando recibimos un comando AT como dato por parte del comando 0xF2,
+	 * debido a la condicion de corte en el case 1, el paquete se corta antes de tiempo
+	 *
+	 */
+
 	if (esp_buffer_read.read_index != esp_buffer_read.write_index)
 	{
 		switch (esp_manager.read_state)
@@ -338,6 +345,149 @@ void esp_read_pending(void)
 					esp_manager.cmd = ESP_COMMAND_IDLE;
 				}
 
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_init + 4, (uint8_t *)("+IPD,"), 5))
+				{
+					char len_char[4] = {'\0'};
+					uint8_t len_uint;
+
+					i = esp_manager.cmd_init + 5;
+					j = 0;
+
+					while ((esp_buffer_read.data[i] != ':') && (j < 3))
+					{
+						len_char[j] = esp_buffer_read.data[i];
+
+						i++;
+						j++;
+					}
+
+					len_uint = atoi(len_char);
+
+					esp_buffer_read.scan_index = i;
+
+					while (esp_buffer_read.scan_index != (i + len_uint - 1))
+					{
+						switch (esp_buffer_read.read_state)
+						{
+							case 0:	// Inicio de la abecera
+								if (esp_buffer_read.data[esp_buffer_read.scan_index] == 'U')
+								{
+									esp_buffer_read.read_state = 1;
+
+									//ticker_new(usbcdc_timeout, 200, TICKER_HIGH_PRIORITY);
+								}
+
+								break;
+
+							case 1:
+								if (esp_buffer_read.data[esp_buffer_read.scan_index] == 'N')
+								{
+									esp_buffer_read.read_state = 2;
+								}
+
+								else
+								{
+									esp_buffer_read.read_state = 0;
+								}
+
+								break;
+
+							case 2:
+								if (esp_buffer_read.data[esp_buffer_read.scan_index] == 'E')
+								{
+									esp_buffer_read.read_state = 3;
+								}
+
+								else
+								{
+									esp_buffer_read.read_state = 0;
+								}
+
+								break;
+
+							case 3:
+								if (esp_buffer_read.data[esp_buffer_read.scan_index] == 'R')
+								{
+									esp_buffer_read.read_state = 4;
+								}
+
+								else
+								{
+									esp_buffer_read.read_state = 0;
+								}
+
+								break;
+
+							case 4:	// Lee el tamaño del payload
+								esp_buffer_read.payload_length = esp_buffer_read.data[esp_buffer_read.scan_index];
+
+								esp_buffer_read.read_state = 5;
+
+								break;
+
+							case 5:	// Token
+								if (esp_buffer_read.data[esp_buffer_read.scan_index] == ':')
+								{
+									esp_buffer_read.read_state = 6;
+								}
+
+								else
+								{
+									esp_buffer_read.read_state = 0;
+								}
+
+								break;
+
+							case 6:	// Comando
+								esp_buffer_read.payload_init = esp_buffer_read.scan_index + 1;
+
+								esp_buffer_read.read_state = 7;
+
+								break;
+
+							case 7:	// Verificación de datos
+								// Si se terminaron de recibir todos los datos
+								if (esp_buffer_read.scan_index == (esp_buffer_read.payload_init + esp_buffer_read.payload_length))
+								{
+									// Se comprueba la integridad de datos
+									if (xor(esp_buffer_read.data[esp_buffer_read.payload_init - 1], (uint8_t *)(esp_buffer_read.data),
+											esp_buffer_read.payload_init, esp_buffer_read.payload_length)
+											== esp_buffer_read.data[esp_buffer_read.scan_index])
+									{
+										// Analisis del comando recibido
+										switch (esp_buffer_read.data[esp_buffer_read.payload_init - 1])
+										{
+											case 0xF0:  // ALIVE
+												esp_send_cmd(0xF0, NULL, 0x00);
+
+												break;
+
+											default:	// Comando no valido
+												esp_send_cmd(0xFF, (uint8_t *)(&esp_buffer_read.data[esp_buffer_read.payload_init - 1]), 0x01);
+
+												break;
+										}
+									}
+
+									// Corrupcion de datos al recibir
+									else
+									{
+
+									}
+
+									// Detengo el timeout
+									//ticker_delete(usbcdc_timeout);
+
+									esp_buffer_read.read_state = 0;
+								}
+
+								break;
+						}
+
+						esp_buffer_read.scan_index++;
+					}
+				}
+
 				esp_manager.read_state = 0;
 
 				break;
@@ -356,23 +506,22 @@ void esp_write_send_data_pending(void)
 {
 	if (esp_buffer_cmd_write.read_index != esp_buffer_cmd_write.write_index)
 	{
-		uint8_t i = 0;
-
 		switch (esp_manager.status)
 		{
 			case ESP_STATUS_UDP_READY:
-				i = esp_buffer_cmd_write.read_index;
-				esp_manager.send_data_length = 0;
-
-				while (i != esp_buffer_cmd_write.write_index)
+				if (esp_buffer_cmd_write.read_index < esp_buffer_cmd_write.write_index)
 				{
-					i++;
-					esp_manager.send_data_length++;
+					esp_manager.send_data_length = esp_buffer_cmd_write.write_index - esp_buffer_cmd_write.read_index;
+				}
+
+				else
+				{
+					esp_manager.send_data_length = 256 - esp_buffer_cmd_write.read_index + esp_buffer_cmd_write.write_index + 1;
 				}
 
 				esp_write_buffer_write((uint8_t *)("AT+CIPSEND="), 11);
 
-				char len_char[3];
+				char len_char[4];
 
 				uint8_t len_uint = sprintf(len_char, "%u", esp_manager.send_data_length);
 

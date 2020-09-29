@@ -46,6 +46,8 @@ typedef struct
 	volatile uint8_t read_index;
 	volatile uint8_t write_index;
 
+	volatile uint8_t scan_index;
+
 	volatile uint8_t read_state;
 	uint8_t payload_length;
 	uint8_t payload_init;
