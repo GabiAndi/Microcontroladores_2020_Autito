@@ -1,10 +1,17 @@
 #include "usbcdc.h"
 
 // Variables
+extern flash_data_t flash_user_ram;
+
 usbcdc_buffer_read_t usbcdc_buffer_read;
 usbcdc_buffer_write_t usbcdc_buffer_write;
 
 extern uint8_t debug;
+
+uint8_t request;
+
+uint8_t i;
+uint8_t j;
 
 void usbcdc_init(void)
 {
@@ -143,6 +150,128 @@ void usbcdc_read_pending(void)
 						// Analisis del comando recibido
 						switch (usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init - 1])
 						{
+							case 0xD0:	// Seteo de ssid
+								flash_user_ram.ssid_length = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init];
+
+								i = 0;
+								j = usbcdc_buffer_read.payload_init + 1;
+
+								while (i < flash_user_ram.ssid_length)
+								{
+									flash_user_ram.ssid[i] = usbcdc_buffer_read.data[j];
+
+									i++;
+									j++;
+								}
+
+								request = 0x00;
+
+								usbcdc_send_cmd(0xD0, &request, 0x01);
+
+								break;
+
+							case 0xD1:	// Seteo de psw
+								flash_user_ram.psw_length = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init];
+
+								i = 0;
+								j = usbcdc_buffer_read.payload_init + 1;
+
+								while (i < flash_user_ram.psw_length)
+								{
+									flash_user_ram.psw[i] = usbcdc_buffer_read.data[j];
+
+									i++;
+									j++;
+								}
+
+								request = 0x00;
+
+								usbcdc_send_cmd(0xD1, &request, 0x01);
+
+								break;
+
+							case 0xD2:	// Seteo de la ip del micro
+								flash_user_ram.ip_mcu_length = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init];
+
+								i = 0;
+								j = usbcdc_buffer_read.payload_init + 1;
+
+								while (i < flash_user_ram.ip_mcu_length)
+								{
+									flash_user_ram.ip_mcu[i] = usbcdc_buffer_read.data[j];
+
+									i++;
+									j++;
+								}
+
+								request = 0x00;
+
+								usbcdc_send_cmd(0xD2, &request, 0x01);
+
+								break;
+
+							case 0xD3:	// Seteo de la ip del pc
+								flash_user_ram.ip_pc_length = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init];
+
+								i = 0;
+								j = usbcdc_buffer_read.payload_init + 1;
+
+								while (i < flash_user_ram.ip_pc_length)
+								{
+									flash_user_ram.ip_pc[i] = usbcdc_buffer_read.data[j];
+
+									i++;
+									j++;
+								}
+
+								request = 0x00;
+
+								usbcdc_send_cmd(0xD3, &request, 0x01);
+
+								break;
+
+							case 0xD4:	// Seteo del puerto UDP
+								flash_user_ram.port_length = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init];
+
+								i = 0;
+								j = usbcdc_buffer_read.payload_init + 1;
+
+								while (i < flash_user_ram.port_length)
+								{
+									flash_user_ram.port[i] = usbcdc_buffer_read.data[j];
+
+									i++;
+									j++;
+								}
+
+								request = 0x00;
+
+								usbcdc_send_cmd(0xD4, &request, 0x01);
+
+								break;
+
+							case 0xD5:	// Graba los parametros en ram en la flash
+								request = 0x00;
+
+								if (usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init] == 0xFF)
+								{
+									request = save_flash_data();
+								}
+
+								if (request == HAL_OK)
+								{
+									request = 0x00;
+								}
+
+								else
+								{
+									request = 0xFF;
+								}
+
+								usbcdc_send_cmd(0xD5, &request, 0x01);
+
+								break;
+
 							case 0xF0:  // ALIVE
 								usbcdc_send_cmd(0xF0, NULL, 0x00);
 
@@ -153,7 +282,7 @@ void usbcdc_read_pending(void)
 								{
 									debug = DEBUG_ON;
 
-									uint8_t request = 0x00;
+									request = 0x00;
 
 									usbcdc_send_cmd(0xF1, &request, 0x01);
 								}
@@ -162,14 +291,14 @@ void usbcdc_read_pending(void)
 								{
 									debug = DEBUG_OFF;
 
-									uint8_t request = 0x00;
+									request = 0x00;
 
 									usbcdc_send_cmd(0xF1, &request, 0x01);
 								}
 
 								else
 								{
-									uint8_t request = 0xFF;
+									request = 0xFF;
 
 									usbcdc_send_cmd(0xF1, &request, 0x01);
 								}

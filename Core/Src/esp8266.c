@@ -2,6 +2,7 @@
 
 // Variables
 extern __attribute__ ((__section__(".user_data_flash"))) flash_data_t flash_user;
+extern flash_data_t flash_user_ram;
 
 esp_buffer_read_t esp_buffer_read;
 esp_buffer_write_t esp_buffer_write;
@@ -9,6 +10,11 @@ esp_buffer_write_t esp_buffer_write;
 esp_buffer_write_t esp_buffer_cmd_write;
 
 esp_manager_t esp_manager;
+
+uint8_t request;
+
+uint8_t i;
+uint8_t j;
 
 // Byte temporal de recepción de datos
 volatile uint8_t byte_receibe_usart;
@@ -68,7 +74,7 @@ void esp_send_at(uint8_t *cmd, uint8_t length)
 	esp_write_buffer_write((uint8_t *)("\r\n"), 2);
 }
 
-uint8_t esp_send_cmd(uint8_t cmd, uint8_t *payload, uint8_t length)
+void esp_send_cmd(uint8_t cmd, uint8_t *payload, uint8_t length)
 {
 	// Cabecera UNER
 	esp_write_buffer_send_data_write((uint8_t *)("UNER"), 4);
@@ -348,7 +354,48 @@ __attribute__((weak)) void esp_write_pending(void)
 
 void esp_write_send_data_pending(void)
 {
+	if (esp_buffer_cmd_write.read_index != esp_buffer_cmd_write.write_index)
+	{
+		uint8_t i = 0;
 
+		switch (esp_manager.status)
+		{
+			case ESP_STATUS_UDP_READY:
+				i = esp_buffer_cmd_write.read_index;
+				esp_manager.send_data_length = 0;
+
+				while (i != esp_buffer_cmd_write.write_index)
+				{
+					i++;
+					esp_manager.send_data_length++;
+				}
+
+				esp_write_buffer_write((uint8_t *)("AT+CIPSEND="), 11);
+
+				char len_char[3];
+
+				uint8_t len_uint = sprintf(len_char, "%u", esp_manager.send_data_length);
+
+				esp_write_buffer_write((uint8_t *)(len_char), len_uint);
+
+				esp_write_buffer_write((uint8_t *)("\r\n"), 2);
+
+				esp_manager.status = ESP_STATUS_WAIT_SENDING;
+				break;
+
+			case ESP_STATUS_READY_SEND:
+				while ((esp_manager.send_data_length > 0) && (esp_buffer_cmd_write.read_index != esp_buffer_cmd_write.write_index))
+				{
+					esp_write_buffer_write((uint8_t *)(&esp_buffer_cmd_write.data[esp_buffer_cmd_write.read_index]), 1);
+					esp_buffer_cmd_write.read_index++;
+					esp_manager.send_data_length--;
+				}
+
+				esp_manager.status = ESP_STATUS_WAIT_SENDING;
+
+				break;
+		}
+	}
 }
 
 uint8_t esp_at_cmp(uint8_t *at, uint8_t at_init, uint8_t at_end, uint8_t *at_cmp, uint8_t at_cmp_length)
@@ -400,9 +447,9 @@ void esp_connect_to_ap(void)
 
 			case ESP_STATUS_STATION_OK:
 				esp_write_buffer_write((uint8_t *)("AT+CWJAP_CUR=\""), 14);
-				esp_write_buffer_write(flash_user.ssid, flash_user.ssid_length);
+				esp_write_buffer_write(flash_user_ram.ssid, flash_user_ram.ssid_length);
 				esp_write_buffer_write((uint8_t *)("\",\""), 3);
-				esp_write_buffer_write(flash_user.psw, flash_user.psw_length);
+				esp_write_buffer_write(flash_user_ram.psw, flash_user_ram.psw_length);
 				esp_write_buffer_write((uint8_t *)("\""), 1);
 				esp_write_buffer_write((uint8_t *)("\r\n"), 2);
 
@@ -414,7 +461,7 @@ void esp_connect_to_ap(void)
 
 			case ESP_STATUS_CONNECTED_GOT_IP:
 				esp_write_buffer_write((uint8_t *)("AT+CIPSTA_CUR=\""), 15);
-				esp_write_buffer_write(flash_user.ip_mcu, flash_user.ip_mcu_length);
+				esp_write_buffer_write(flash_user_ram.ip_mcu, flash_user_ram.ip_mcu_length);
 				esp_write_buffer_write((uint8_t *)("\""), 1);
 				esp_write_buffer_write((uint8_t *)("\r\n"), 2);
 
@@ -422,11 +469,11 @@ void esp_connect_to_ap(void)
 
 			case ESP_STATUS_SET_IP:
 				esp_write_buffer_write((uint8_t *)("AT+CIPSTART=\"UDP\",\""), 19);
-				esp_write_buffer_write(flash_user.ip_pc, flash_user.ip_pc_length);
+				esp_write_buffer_write(flash_user_ram.ip_pc, flash_user_ram.ip_pc_length);
 				esp_write_buffer_write((uint8_t *)("\","), 2);
-				esp_write_buffer_write(flash_user.port, flash_user.port_length);
+				esp_write_buffer_write(flash_user_ram.port, flash_user_ram.port_length);
 				esp_write_buffer_write((uint8_t *)(","), 1);
-				esp_write_buffer_write(flash_user.port, flash_user.port_length);
+				esp_write_buffer_write(flash_user_ram.port, flash_user_ram.port_length);
 				esp_write_buffer_write((uint8_t *)("\r\n"), 2);
 
 				break;

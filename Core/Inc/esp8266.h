@@ -13,6 +13,8 @@
 #define ESP_STATUS_SET_IP					6
 #define ESP_STATUS_UDP_READY				7
 #define ESP_STATUS_READY_SEND				8
+#define ESP_STATUS_WAIT_SENDING				9
+#define ESP_STATUS_SENDING					10
 
 #define ESP_STATUS_ERROR_INIT				100
 #define ESP_STATUS_ERROR_CWMODE				101
@@ -36,11 +38,6 @@
 #define ESP_COMMAND_AT_CIPCLOSE				6
 #define ESP_COMMAND_AT_CIPSTART				7
 #define ESP_COMMAND_AT_CIPSEND				8
-
-#define ESP_SEND_OK							0
-#define ESP_SEND_WAIT						1
-#define ESP_SEND_NOT_READY					2
-
 
 // Typedef
 typedef struct
@@ -82,7 +79,7 @@ void esp_write_buffer_send_data_write(uint8_t *data, uint8_t length);
 void esp_write_buffer_read(uint8_t *data, uint8_t length);
 
 void esp_send_at(uint8_t *cmd, uint8_t length);
-uint8_t esp_send_cmd(uint8_t cmd, uint8_t *payload, uint8_t length);
+void esp_send_cmd(uint8_t cmd, uint8_t *payload, uint8_t length);
 
 void esp_read_pending(void);
 void esp_write_pending(void);

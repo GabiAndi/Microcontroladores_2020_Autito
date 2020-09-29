@@ -58,11 +58,14 @@ extern esp_manager_t esp_manager;
 extern usbcdc_buffer_read_t usbcdc_buffer_read;
 extern usbcdc_buffer_write_t usbcdc_buffer_write;
 
-extern __attribute__ ((__section__(".user_data_flash"))) flash_data_t flash_user;
-
 extern volatile uint8_t byte_receibe_usart;
 
 extern uint8_t debug;
+
+uint8_t request;
+
+uint8_t i;
+uint8_t j;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -73,6 +76,8 @@ static void MX_USART3_UART_Init(void);
 static void MX_ADC1_Init(void);
 /* USER CODE BEGIN PFP */
 void led_blink(void);
+
+void send_data(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -113,13 +118,15 @@ int main(void)
   MX_USART3_UART_Init();
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
-  HAL_Delay(1000);
+  HAL_Delay(2000);
 
   system_init();	// Inicia la configuración del sistema
 
   ticker_new(led_blink, LED_FAIL, TICKER_LOW_PRIORITY);	// Ticker para el led de estado
 
   HAL_UART_Receive_IT(&huart3, (uint8_t *)(&byte_receibe_usart), 1);
+
+  ticker_new(send_data, 10000, TICKER_LOW_PRIORITY);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -136,6 +143,7 @@ int main(void)
 
 	  esp_read_pending();
 	  esp_write_pending();
+	  esp_write_send_data_pending();
   }
   /* USER CODE END 3 */
 }
@@ -385,6 +393,11 @@ void led_blink(void)
 	HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 }
 
+void send_data(void)
+{
+	esp_send_cmd(0xF0, NULL, 0x00);
+}
+
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
 
@@ -392,14 +405,17 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-	esp_write_buffer_read((uint8_t *)(&byte_receibe_usart), 1);
-
-	if (debug == DEBUG_ON)
+	if (huart->Instance == USART3)
 	{
-		usbcdc_write_buffer_write((uint8_t *)(&byte_receibe_usart), 1);
-	}
+		esp_write_buffer_read((uint8_t *)(&byte_receibe_usart), 1);
 
-	HAL_UART_Receive_IT(&huart3, (uint8_t *)(&byte_receibe_usart), 1);
+		if (debug == DEBUG_ON)
+		{
+			usbcdc_write_buffer_write((uint8_t *)(&byte_receibe_usart), 1);
+		}
+
+		HAL_UART_Receive_IT(&huart3, (uint8_t *)(&byte_receibe_usart), 1);
+	}
 }
 /* USER CODE END 4 */
 
