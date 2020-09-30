@@ -98,7 +98,7 @@ void esp_read_pending(void)
 				if (esp_buffer_read.data[esp_buffer_read.read_index] != '\r' &&
 						esp_buffer_read.data[esp_buffer_read.read_index] != '\n')
 				{
-					ticker_new(esp_timeout, 200, TICKER_LOW_PRIORITY);
+					ticker_new(esp_timeout_read, 200, TICKER_LOW_PRIORITY);
 
 					esp_manager.cmd_init = esp_buffer_read.read_index;
 
@@ -111,7 +111,7 @@ void esp_read_pending(void)
 				if (esp_buffer_read.data[esp_buffer_read.read_index] == '\r' ||
 						esp_buffer_read.data[esp_buffer_read.read_index] == '\n')
 				{
-					ticker_delete(esp_timeout);
+					ticker_delete(esp_timeout_read);
 
 					esp_manager.cmd_end = esp_buffer_read.read_index - 1;
 
@@ -326,7 +326,7 @@ void esp_read_pending(void)
 
 				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("SEND OK"), 7))
 				{
-					esp_manager.status = ESP_STATUS_UDP_READY;
+					esp_manager.status = ESP_STATUS_SEND_OK;
 
 					esp_manager.cmd = ESP_COMMAND_IDLE;
 				}
@@ -359,7 +359,7 @@ void esp_read_pending(void)
 					esp_buffer_read.scan_index = i + 1;
 					esp_buffer_read.read_state = 0;
 
-					while (esp_buffer_read.scan_index != (i + len_uint + 1))
+					while (esp_buffer_read.scan_index != (uint8_t)(i + len_uint + 1))
 					{
 						switch (esp_buffer_read.read_state)
 						{
@@ -368,7 +368,7 @@ void esp_read_pending(void)
 								{
 									esp_buffer_read.read_state = 1;
 
-									//ticker_new(usbcdc_timeout, 200, TICKER_HIGH_PRIORITY);
+									ticker_new(esp_timeout_read, 200, TICKER_HIGH_PRIORITY);
 								}
 
 								break;
@@ -470,7 +470,7 @@ void esp_read_pending(void)
 									}
 
 									// Detengo el timeout
-									//ticker_delete(usbcdc_timeout);
+									ticker_delete(esp_timeout_read);
 
 									esp_buffer_read.read_state = 0;
 								}
@@ -523,6 +523,8 @@ void esp_write_send_data_pending(void)
 
 				esp_write_buffer_write((uint8_t *)("\r\n"), 2);
 
+				ticker_new(esp_timeout_send, 100, TICKER_LOW_PRIORITY);
+
 				esp_manager.status = ESP_STATUS_WAIT_SENDING;
 				break;
 
@@ -534,7 +536,13 @@ void esp_write_send_data_pending(void)
 					esp_manager.send_data_length--;
 				}
 
-				esp_manager.status = ESP_STATUS_WAIT_SENDING;
+				esp_manager.status = ESP_STATUS_SENDING;
+				break;
+
+			case ESP_STATUS_SEND_OK:
+				ticker_delete(esp_timeout_send);
+
+				esp_manager.status = ESP_STATUS_UDP_READY;
 
 				break;
 		}
@@ -565,11 +573,19 @@ uint8_t esp_at_cmp(uint8_t *at, uint8_t at_init, uint8_t at_end, uint8_t *at_cmp
 	return 1;
 }
 
-void esp_timeout(void)
+void esp_timeout_read(void)
 {
-	ticker_delete(esp_timeout);
+	ticker_delete(esp_timeout_read);
 
 	esp_manager.read_state = 0;
+	esp_buffer_read.read_state = 0;
+}
+
+void esp_timeout_send(void)
+{
+	ticker_delete(esp_timeout_send);
+
+	esp_manager.status = ESP_STATUS_UDP_READY;
 }
 
 void esp_connect_to_ap(void)

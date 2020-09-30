@@ -1,11 +1,18 @@
 #ifndef INC_SYSTEM_H_
 #define INC_SYSTEM_H_
 
-/* ¡BUG!
+/* 1) ¡BUG!
  *
  * Cuando recibimos un comando AT como dato por parte del comando 0xF2,
  * debido a la condicion de corte en el case 1 de la recepción del UDP,
  * el paquete se corta antes de tiempo debido al \r \n
+ *
+ */
+
+/* 2) ¡BUG!
+ *
+ * Luego de una cantidad de datos enviados la recepción se cuelga,
+ * y la ESP deja de responder
  *
  */
 

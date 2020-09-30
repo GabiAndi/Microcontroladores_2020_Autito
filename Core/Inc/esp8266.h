@@ -15,6 +15,7 @@
 #define ESP_STATUS_READY_SEND				8
 #define ESP_STATUS_WAIT_SENDING				9
 #define ESP_STATUS_SENDING					10
+#define ESP_STATUS_SEND_OK					11
 
 #define ESP_STATUS_ERROR_INIT				100
 #define ESP_STATUS_ERROR_CWMODE				101
@@ -89,7 +90,8 @@ void esp_write_send_data_pending(void);
 
 uint8_t esp_at_cmp(uint8_t *at, uint8_t at_init, uint8_t at_end, uint8_t *at_cmp, uint8_t at_cmp_length);
 
-void esp_timeout(void);
+void esp_timeout_read(void);
+void esp_timeout_send(void);
 
 void esp_connect_to_ap(void);
 
