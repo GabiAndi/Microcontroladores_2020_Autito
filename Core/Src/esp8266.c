@@ -90,13 +90,6 @@ void esp_send_cmd(uint8_t cmd, uint8_t *payload, uint8_t length)
 
 void esp_read_pending(void)
 {
-	/* ¡BUG!
-	 *
-	 * Cuando recibimos un comando AT como dato por parte del comando 0xF2,
-	 * debido a la condicion de corte en el case 1, el paquete se corta antes de tiempo
-	 *
-	 */
-
 	if (esp_buffer_read.read_index != esp_buffer_read.write_index)
 	{
 		switch (esp_manager.read_state)
@@ -361,11 +354,12 @@ void esp_read_pending(void)
 						j++;
 					}
 
-					len_uint = atoi(len_char);
+					len_uint = (uint8_t)(atoi(len_char));
 
-					esp_buffer_read.scan_index = i;
+					esp_buffer_read.scan_index = i + 1;
+					esp_buffer_read.read_state = 0;
 
-					while (esp_buffer_read.scan_index != (i + len_uint - 1))
+					while (esp_buffer_read.scan_index != (i + len_uint + 1))
 					{
 						switch (esp_buffer_read.read_state)
 						{
