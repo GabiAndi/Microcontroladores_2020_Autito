@@ -6,7 +6,7 @@
 #include <inttypes.h>
 
 // Definiciones
-#define TICKER_MAX_USE                 					10	// Ticker como maximo
+#define TICKER_MAX_USE                 					15	// Ticker como maximo
 
 #define TICKER_LOW_PRIORITY								0
 #define TICKER_HIGH_PRIORITY							1

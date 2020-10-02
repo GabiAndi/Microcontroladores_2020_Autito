@@ -23,11 +23,6 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "stm32f1xx_hal_flash.h"
-#include "stm32f1xx_hal_flash_ex.h"
-
-#include "usbd_cdc_if.h"
-
 #include "system.h"
 /* USER CODE END Includes */
 

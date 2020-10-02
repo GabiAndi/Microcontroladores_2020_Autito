@@ -42,10 +42,15 @@
 
 #include "main.h"
 
-#include "usbcdc.h"
-#include "esp8266.h"
+#include "stm32f1xx_hal_flash.h"
+#include "stm32f1xx_hal_flash_ex.h"
+
+#include "usbd_cdc_if.h"
 
 #include "ticker.h"
+
+#include "usbcdc.h"
+#include "esp8266.h"
 
 #define LED_OK							1000
 #define LED_FAIL						50

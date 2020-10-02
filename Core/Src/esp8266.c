@@ -522,7 +522,7 @@ void esp_write_send_data_pending(void)
 
 				esp_write_buffer_write((uint8_t *)("\r\n"), 2);
 
-				ticker_new(esp_timeout_send, 400, TICKER_LOW_PRIORITY);
+				ticker_new(esp_timeout_send, 100, TICKER_LOW_PRIORITY);
 
 				esp_manager.status = ESP_STATUS_WAIT_SENDING;
 				break;
@@ -655,7 +655,7 @@ void esp_hard_reset(void)
 {
 	HAL_GPIO_WritePin(ESP_RST_GPIO_Port, ESP_RST_Pin, GPIO_PIN_RESET);
 
-	ticker_new(esp_hard_reset_stop, 200, TICKER_LOW_PRIORITY);
+	ticker_new(esp_hard_reset_stop, 100, TICKER_LOW_PRIORITY);
 }
 
 void esp_hard_reset_stop(void)
@@ -663,6 +663,8 @@ void esp_hard_reset_stop(void)
 	HAL_GPIO_WritePin(ESP_RST_GPIO_Port, ESP_RST_Pin, GPIO_PIN_SET);
 
 	ticker_delete(esp_hard_reset_stop);
+
+	ticker_new(esp_connect_to_ap, 500, TICKER_LOW_PRIORITY);
 }
 
 void esp_guardian_status(void)
@@ -670,12 +672,9 @@ void esp_guardian_status(void)
 	switch (esp_manager.status)
 	{
 		case ESP_STATUS_DISCONNECTED:
-			esp_send_at((uint8_t *)("AT+RST"), 6);
+			esp_hard_reset();
 
 			esp_manager.status = ESP_STATUS_NO_INIT;
-
-			ticker_new(esp_connect_to_ap, 500, TICKER_LOW_PRIORITY);
-
 			break;
 	}
 }
