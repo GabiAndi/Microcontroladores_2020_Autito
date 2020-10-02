@@ -118,6 +118,8 @@ int main(void)
   MX_USART3_UART_Init();
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
+  HAL_GPIO_WritePin(ESP_RST_GPIO_Port, ESP_RST_Pin, GPIO_PIN_SET);
+
   HAL_Delay(2000);
 
   system_init();	// Inicia la configuración del sistema
@@ -142,6 +144,8 @@ int main(void)
 	  esp_read_pending();
 	  esp_write_pending();
 	  esp_write_send_data_pending();
+
+	  esp_guardian_status();
   }
   /* USER CODE END 3 */
 }
@@ -344,12 +348,22 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
 
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(ESP_RST_GPIO_Port, ESP_RST_Pin, GPIO_PIN_RESET);
+
   /*Configure GPIO pin : LED_Pin */
   GPIO_InitStruct.Pin = LED_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : ESP_RST_Pin */
+  GPIO_InitStruct.Pin = ESP_RST_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(ESP_RST_GPIO_Port, &GPIO_InitStruct);
 
 }
 
@@ -378,7 +392,7 @@ void esp_write_pending(void)
 
 void led_blink(void)
 {
-	if (esp_manager.status == ESP_STATUS_READY_SEND)
+	if (esp_manager.status == ESP_STATUS_UDP_READY)
 	{
 		ticker_change_period(led_blink, LED_OK);
 	}

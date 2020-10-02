@@ -47,8 +47,6 @@ typedef struct
 	volatile uint8_t read_index;
 	volatile uint8_t write_index;
 
-	volatile uint8_t scan_index;
-
 	volatile uint8_t read_state;
 	uint8_t payload_length;
 	uint8_t payload_init;
@@ -66,12 +64,17 @@ typedef struct
 	uint8_t status;
 	uint8_t read_state;
 
+	uint8_t read_cmd_index;
+
 	uint8_t cmd;
 
 	uint8_t cmd_init;
 	uint8_t cmd_end;
 
 	uint8_t send_data_length;
+
+	char len_char[4];
+	uint8_t len_uint;
 }esp_manager_t;
 
 // Funciones
@@ -94,5 +97,10 @@ void esp_timeout_read(void);
 void esp_timeout_send(void);
 
 void esp_connect_to_ap(void);
+
+void esp_hard_reset(void);
+void esp_hard_reset_stop(void);
+
+void esp_guardian_status(void);
 
 #endif /* INC_ESP8266_H_ */

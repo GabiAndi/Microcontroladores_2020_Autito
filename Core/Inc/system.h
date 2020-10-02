@@ -9,16 +9,36 @@
  *
  */
 
-/* 2) ¡BUG!
+/* 2) ¡AGREGAR!
  *
- * Luego de una cantidad de datos enviados la recepción se cuelga,
- * y la ESP deja de responder
+ * Si se desconecta la esp se deberia iniciar otra vez el autonectado
+ *
+ */
+
+/* 3) ¡AGREGAR!
+ *
+ * Es necesario un control de integridad para verificar si los datos
+ * contenidos en la flash son valores aleatorios o iniciales
+ *
+ */
+
+/* 4) ¡MEJORAR!
+ *
+ * Atoi en la lectura de datos
+ *
+ */
+
+/* 5) ¡VER MEJORA!
+ *
+ * En la copia de datos del buffer de comandos de esp al buffer de envio
+ * ver la posibilidad de mejorar el while de copia
  *
  */
 
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "main.h"
 
@@ -51,7 +71,9 @@ typedef struct
 	uint8_t port[10];
 	uint8_t port_length;
 
-	uint8_t padding[1024 - 31 - 31 - 21 - 21 - 11];
+	uint8_t checksum;
+
+	uint8_t padding[1024 - 31 - 31 - 21 - 21 - 11 - 1];
 }__attribute__ ((packed)) flash_data_t;
 
 void system_init(void);

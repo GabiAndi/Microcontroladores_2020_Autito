@@ -6,7 +6,6 @@ extern flash_data_t flash_user_ram;
 
 esp_buffer_read_t esp_buffer_read;
 esp_buffer_write_t esp_buffer_write;
-
 esp_buffer_write_t esp_buffer_cmd_write;
 
 esp_manager_t esp_manager;
@@ -34,6 +33,7 @@ void esp_init(void)
 
 	// Inicializacion del esp manager
 	esp_manager.read_state = 0;
+	esp_manager.read_cmd_index = 0;
 	esp_manager.cmd = ESP_COMMAND_IDLE;
 	esp_manager.status = ESP_STATUS_NO_INIT;
 
@@ -340,41 +340,40 @@ void esp_read_pending(void)
 
 				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_init + 4, (uint8_t *)("+IPD,"), 5))
 				{
-					char len_char[4] = {'\0'};
-					uint8_t len_uint;
+					memset(esp_manager.len_char, '\0', 4);
 
 					i = esp_manager.cmd_init + 5;
 					j = 0;
 
 					while ((esp_buffer_read.data[i] != ':') && (j < 3))
 					{
-						len_char[j] = esp_buffer_read.data[i];
+						esp_manager.len_char[j] = esp_buffer_read.data[i];
 
 						i++;
 						j++;
 					}
 
-					len_uint = (uint8_t)(atoi(len_char));
+					esp_manager.len_uint = (uint8_t)(atoi(esp_manager.len_char));
 
-					esp_buffer_read.scan_index = i + 1;
+					esp_manager.read_cmd_index = i + 1;
 					esp_buffer_read.read_state = 0;
 
-					while (esp_buffer_read.scan_index != (uint8_t)(i + len_uint + 1))
+					while (esp_manager.read_cmd_index != (uint8_t)(i + esp_manager.len_uint))
 					{
 						switch (esp_buffer_read.read_state)
 						{
 							case 0:	// Inicio de la abecera
-								if (esp_buffer_read.data[esp_buffer_read.scan_index] == 'U')
+								if (esp_buffer_read.data[esp_manager.read_cmd_index] == 'U')
 								{
 									esp_buffer_read.read_state = 1;
 
-									ticker_new(esp_timeout_read, 200, TICKER_HIGH_PRIORITY);
+									ticker_new(esp_timeout_read, 200, TICKER_LOW_PRIORITY);
 								}
 
 								break;
 
 							case 1:
-								if (esp_buffer_read.data[esp_buffer_read.scan_index] == 'N')
+								if (esp_buffer_read.data[esp_manager.read_cmd_index] == 'N')
 								{
 									esp_buffer_read.read_state = 2;
 								}
@@ -387,7 +386,7 @@ void esp_read_pending(void)
 								break;
 
 							case 2:
-								if (esp_buffer_read.data[esp_buffer_read.scan_index] == 'E')
+								if (esp_buffer_read.data[esp_manager.read_cmd_index] == 'E')
 								{
 									esp_buffer_read.read_state = 3;
 								}
@@ -400,7 +399,7 @@ void esp_read_pending(void)
 								break;
 
 							case 3:
-								if (esp_buffer_read.data[esp_buffer_read.scan_index] == 'R')
+								if (esp_buffer_read.data[esp_manager.read_cmd_index] == 'R')
 								{
 									esp_buffer_read.read_state = 4;
 								}
@@ -413,14 +412,14 @@ void esp_read_pending(void)
 								break;
 
 							case 4:	// Lee el tamaño del payload
-								esp_buffer_read.payload_length = esp_buffer_read.data[esp_buffer_read.scan_index];
+								esp_buffer_read.payload_length = esp_buffer_read.data[esp_manager.read_cmd_index];
 
 								esp_buffer_read.read_state = 5;
 
 								break;
 
 							case 5:	// Token
-								if (esp_buffer_read.data[esp_buffer_read.scan_index] == ':')
+								if (esp_buffer_read.data[esp_manager.read_cmd_index] == ':')
 								{
 									esp_buffer_read.read_state = 6;
 								}
@@ -433,7 +432,7 @@ void esp_read_pending(void)
 								break;
 
 							case 6:	// Comando
-								esp_buffer_read.payload_init = esp_buffer_read.scan_index + 1;
+								esp_buffer_read.payload_init = esp_manager.read_cmd_index + 1;
 
 								esp_buffer_read.read_state = 7;
 
@@ -441,12 +440,12 @@ void esp_read_pending(void)
 
 							case 7:	// Verificación de datos
 								// Si se terminaron de recibir todos los datos
-								if (esp_buffer_read.scan_index == (esp_buffer_read.payload_init + esp_buffer_read.payload_length))
+								if (esp_manager.read_cmd_index == (esp_buffer_read.payload_init + esp_buffer_read.payload_length))
 								{
 									// Se comprueba la integridad de datos
 									if (xor(esp_buffer_read.data[esp_buffer_read.payload_init - 1], (uint8_t *)(esp_buffer_read.data),
 											esp_buffer_read.payload_init, esp_buffer_read.payload_length)
-											== esp_buffer_read.data[esp_buffer_read.scan_index])
+											== esp_buffer_read.data[esp_manager.read_cmd_index])
 									{
 										// Analisis del comando recibido
 										switch (esp_buffer_read.data[esp_buffer_read.payload_init - 1])
@@ -478,7 +477,7 @@ void esp_read_pending(void)
 								break;
 						}
 
-						esp_buffer_read.scan_index++;
+						esp_manager.read_cmd_index++;
 					}
 				}
 
@@ -510,26 +509,26 @@ void esp_write_send_data_pending(void)
 
 				else
 				{
-					esp_manager.send_data_length = 256 - esp_buffer_cmd_write.read_index + esp_buffer_cmd_write.write_index + 1;
+					esp_manager.send_data_length = 256 - esp_buffer_cmd_write.read_index + esp_buffer_cmd_write.write_index;
 				}
 
 				esp_write_buffer_write((uint8_t *)("AT+CIPSEND="), 11);
 
-				char len_char[4];
+				memset(esp_manager.len_char, '\0', 4);
 
-				uint8_t len_uint = sprintf(len_char, "%u", esp_manager.send_data_length);
+				esp_manager.len_uint = sprintf(esp_manager.len_char, "%u", esp_manager.send_data_length);
 
-				esp_write_buffer_write((uint8_t *)(len_char), len_uint);
+				esp_write_buffer_write((uint8_t *)(esp_manager.len_char), esp_manager.len_uint);
 
 				esp_write_buffer_write((uint8_t *)("\r\n"), 2);
 
-				ticker_new(esp_timeout_send, 100, TICKER_LOW_PRIORITY);
+				ticker_new(esp_timeout_send, 400, TICKER_LOW_PRIORITY);
 
 				esp_manager.status = ESP_STATUS_WAIT_SENDING;
 				break;
 
 			case ESP_STATUS_READY_SEND:
-				while ((esp_manager.send_data_length > 0) && (esp_buffer_cmd_write.read_index != esp_buffer_cmd_write.write_index))
+				while (esp_manager.send_data_length > 0)
 				{
 					esp_write_buffer_write((uint8_t *)(&esp_buffer_cmd_write.data[esp_buffer_cmd_write.read_index]), 1);
 					esp_buffer_cmd_write.read_index++;
@@ -538,14 +537,14 @@ void esp_write_send_data_pending(void)
 
 				esp_manager.status = ESP_STATUS_SENDING;
 				break;
-
-			case ESP_STATUS_SEND_OK:
-				ticker_delete(esp_timeout_send);
-
-				esp_manager.status = ESP_STATUS_UDP_READY;
-
-				break;
 		}
+	}
+
+	else if (esp_manager.status == ESP_STATUS_SEND_OK)
+	{
+		ticker_delete(esp_timeout_send);
+
+		esp_manager.status = ESP_STATUS_UDP_READY;
 	}
 }
 
@@ -578,6 +577,8 @@ void esp_timeout_read(void)
 	ticker_delete(esp_timeout_read);
 
 	esp_manager.read_state = 0;
+	esp_manager.read_cmd_index = 0;
+
 	esp_buffer_read.read_state = 0;
 }
 
@@ -647,5 +648,34 @@ void esp_connect_to_ap(void)
 	if (ticker_calls(esp_connect_to_ap) > 60)
 	{
 		ticker_delete(esp_connect_to_ap);
+	}
+}
+
+void esp_hard_reset(void)
+{
+	HAL_GPIO_WritePin(ESP_RST_GPIO_Port, ESP_RST_Pin, GPIO_PIN_RESET);
+
+	ticker_new(esp_hard_reset_stop, 200, TICKER_LOW_PRIORITY);
+}
+
+void esp_hard_reset_stop(void)
+{
+	HAL_GPIO_WritePin(ESP_RST_GPIO_Port, ESP_RST_Pin, GPIO_PIN_SET);
+
+	ticker_delete(esp_hard_reset_stop);
+}
+
+void esp_guardian_status(void)
+{
+	switch (esp_manager.status)
+	{
+		case ESP_STATUS_DISCONNECTED:
+			esp_send_at((uint8_t *)("AT+RST"), 6);
+
+			esp_manager.status = ESP_STATUS_NO_INIT;
+
+			ticker_new(esp_connect_to_ap, 500, TICKER_LOW_PRIORITY);
+
+			break;
 	}
 }
