@@ -12,8 +12,8 @@ typedef struct
 	volatile uint8_t write_index;
 
 	volatile uint8_t read_state;
-	uint8_t payload_length;
-	uint8_t payload_init;
+	volatile uint8_t payload_length;
+	volatile uint8_t payload_init;
 }usbcdc_buffer_read_t;
 
 typedef struct
@@ -34,6 +34,6 @@ void usbcdc_send_cmd(uint8_t cmd, uint8_t *payload, uint8_t length);
 void usbcdc_read_pending(void);
 void usbcdc_write_pending(void);
 
-void usbcdc_timeout(void);
+void usbcdc_read_timeout(void);
 
 #endif /* INC_USBCDC_H_ */

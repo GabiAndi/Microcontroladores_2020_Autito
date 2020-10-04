@@ -9,7 +9,7 @@ void adc_init(void)
 	adc_buffer.send_esp = ADC_SEND_DATA_OFF;
 	adc_buffer.data_index = 0;
 
-	ticker_new(adc_start_ticker, 2, TICKER_LOW_PRIORITY);
+	//ticker_new(adc_start_ticker, 2, TICKER_LOW_PRIORITY);
 }
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)

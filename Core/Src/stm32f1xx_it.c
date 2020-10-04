@@ -43,7 +43,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-extern ticker_t *tickers_user[TICKER_MAX_USE];
+extern ticker_t *tickers[TICKER_MAX_USE];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -191,17 +191,21 @@ void SysTick_Handler(void)
   /* USER CODE BEGIN SysTick_IRQn 1 */
   	for (uint8_t i = 0 ; i < TICKER_MAX_USE ; i++)
 	{
-		if (tickers_user[i] != NULL)
+		if (tickers[i] != 0)
 		{
-			tickers_user[i]->count += 1;
-
-			if ((tickers_user[i]->count >= tickers_user[i]->ms) && (tickers_user[i]->priority == TICKER_HIGH_PRIORITY))
+			if (tickers[i]->active == TICKER_ACTIVE)
 			{
-				tickers_user[i]->count = 0;
+				tickers[i]->ms_count++;
+			}
 
-				tickers_user[i]->function();
+			if ((tickers[i]->ms_count >= tickers[i]->ms_max) && (tickers[i]->priority == TICKER_HIGH_PRIORITY)
+					&& (tickers[i]->active == TICKER_ACTIVE))
+			{
+				tickers[i]->ms_count = 0;
 
-				tickers_user[i]->calls++;
+				tickers[i]->ticker_function();
+
+				tickers[i]->calls++;
 			}
 		}
 	}

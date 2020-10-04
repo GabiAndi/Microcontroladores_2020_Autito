@@ -1,13 +1,19 @@
 #include "system.h"
 
 // Variables
+// Tickers
+ticker_t ticker_system_led_status;
+
+// Datos guardados
 __attribute__ ((__section__(".user_data_flash"))) flash_data_t flash_user;	// Datos en flash
 flash_data_t flash_user_ram;	// Datos en ram
 
 extern esp_manager_t esp_manager;
 
-uint8_t debug;
+// Flag de depuracion via USB
+uint8_t esp_to_usb_debug;
 
+// Variable de conversion de datos
 byte_translate_u byte_translate;
 
 void system_init(void)
@@ -84,27 +90,34 @@ void system_init(void)
 	flash_user_ram.port[3] = '0';
 	flash_user_ram.port[4] = '0';
 
-
-
 	ticker_init_core();	// Inicia la configuracion de los tickers
 
+	// Ticker para el led de estado
+	ticker_system_led_status.ms_count = 0;
+	ticker_system_led_status.ms_max = 250;
+	ticker_system_led_status.calls = 0;
+	ticker_system_led_status.priority = TICKER_LOW_PRIORITY;
+	ticker_system_led_status.ticker_function = system_led_status;
+	ticker_system_led_status.active = TICKER_ACTIVE;
+
+	ticker_new(&ticker_system_led_status);
+
+	// Inicializacion de los modulos
 	usbcdc_init();	// Inicia la configuracion del USB
 	esp_init();	// Inicia la configuracion del ESP
-	adc_init();	// Inicia la configuracion del ADC
-
-	ticker_new(led_blink, LED_FAIL, TICKER_LOW_PRIORITY);	// Ticker para el led de estado
+	//adc_init();	// Inicia la configuracion del ADC
 }
 
-void led_blink(void)
+void system_led_status(void)
 {
-	if (esp_manager.status == ESP_STATUS_UDP_READY)
+	if (esp_manager.udp == ESP_UDP_INIT)
 	{
-		ticker_change_period(led_blink, LED_OK);
+		ticker_system_led_status.ms_max = LED_OK;
 	}
 
 	else
 	{
-		ticker_change_period(led_blink, LED_FAIL);
+		ticker_system_led_status.ms_max = LED_FAIL;
 	}
 
 	HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);

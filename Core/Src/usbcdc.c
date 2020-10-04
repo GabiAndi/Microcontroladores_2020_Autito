@@ -1,16 +1,23 @@
 #include "usbcdc.h"
 
 // Variables
+// Tickers
+ticker_t ticker_usbcdc_read_timeout;
+
+// Datos guardados
 extern flash_data_t flash_user_ram;
 
+// Bufferes de datos
 usbcdc_buffer_read_t usbcdc_buffer_read;
 usbcdc_buffer_write_t usbcdc_buffer_write;
 
-extern uint8_t debug;
+// Flag de depuracion via USB
+extern uint8_t esp_to_usb_debug;
 
 extern adc_buffer_t adc_buffer;
 
-uint8_t request;
+// Variables auxiliares
+uint8_t ack;
 
 uint8_t i;
 uint8_t j;
@@ -24,6 +31,16 @@ void usbcdc_init(void)
 
 	usbcdc_buffer_write.read_index = 0;
 	usbcdc_buffer_write.write_index = 0;
+
+	// Inicializacion del ticker de read timeout
+	ticker_usbcdc_read_timeout.ms_count = 0;
+	ticker_usbcdc_read_timeout.ms_max = 100;
+	ticker_usbcdc_read_timeout.calls = 0;
+	ticker_usbcdc_read_timeout.priority = TICKER_LOW_PRIORITY;
+	ticker_usbcdc_read_timeout.ticker_function = usbcdc_read_timeout;
+	ticker_usbcdc_read_timeout.active = TICKER_DEACTIVATE;
+
+	ticker_new(&ticker_usbcdc_read_timeout);
 }
 
 void usbcdc_write_buffer_write(uint8_t *data, uint8_t length)
@@ -69,7 +86,7 @@ void usbcdc_read_pending(void)
 				{
 					usbcdc_buffer_read.read_state = 1;
 
-					ticker_new(usbcdc_timeout, 200, TICKER_HIGH_PRIORITY);
+					ticker_usbcdc_read_timeout.active = TICKER_ACTIVE;
 				}
 
 				break;
@@ -166,9 +183,9 @@ void usbcdc_read_pending(void)
 									j++;
 								}
 
-								request = 0x00;
+								ack = 0x00;
 
-								usbcdc_send_cmd(0xD0, &request, 0x01);
+								usbcdc_send_cmd(0xD0, &ack, 0x01);
 
 								break;
 
@@ -186,9 +203,9 @@ void usbcdc_read_pending(void)
 									j++;
 								}
 
-								request = 0x00;
+								ack = 0x00;
 
-								usbcdc_send_cmd(0xD1, &request, 0x01);
+								usbcdc_send_cmd(0xD1, &ack, 0x01);
 
 								break;
 
@@ -206,9 +223,9 @@ void usbcdc_read_pending(void)
 									j++;
 								}
 
-								request = 0x00;
+								ack = 0x00;
 
-								usbcdc_send_cmd(0xD2, &request, 0x01);
+								usbcdc_send_cmd(0xD2, &ack, 0x01);
 
 								break;
 
@@ -226,9 +243,9 @@ void usbcdc_read_pending(void)
 									j++;
 								}
 
-								request = 0x00;
+								ack = 0x00;
 
-								usbcdc_send_cmd(0xD3, &request, 0x01);
+								usbcdc_send_cmd(0xD3, &ack, 0x01);
 
 								break;
 
@@ -246,63 +263,56 @@ void usbcdc_read_pending(void)
 									j++;
 								}
 
-								request = 0x00;
+								ack = 0x00;
 
-								usbcdc_send_cmd(0xD4, &request, 0x01);
+								usbcdc_send_cmd(0xD4, &ack, 0x01);
 
 								break;
 
 							case 0xD5:	// Graba los parametros en ram en la flash
-								request = 0x00;
+								ack = 0xFF;
 
 								if (usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init] == 0xFF)
 								{
-									request = save_flash_data();
+									if (save_flash_data() == HAL_OK)
+									{
+										ack = 0x00;
+									}
 								}
 
-								if (request == HAL_OK)
-								{
-									request = 0x00;
-								}
-
-								else
-								{
-									request = 0xFF;
-								}
-
-								usbcdc_send_cmd(0xD5, &request, 0x01);
+								usbcdc_send_cmd(0xD5, &ack, 0x01);
 
 								break;
 
 							case 0xF0:  // ALIVE
-								usbcdc_send_cmd(0xF0, NULL, 0x00);
+								usbcdc_send_cmd(0xF0, 0, 0x00);
 
 								break;
 
 							case 0xF1:	// Modo debug
 								if (usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init] == 0xFF)
 								{
-									debug = DEBUG_ON;
+									esp_to_usb_debug = DEBUG_ON;
 
-									request = 0x00;
+									ack = 0x00;
 
-									usbcdc_send_cmd(0xF1, &request, 0x01);
+									usbcdc_send_cmd(0xF1, &ack, 0x01);
 								}
 
 								else if (usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init] == 0x00)
 								{
-									debug = DEBUG_OFF;
+									esp_to_usb_debug = DEBUG_OFF;
 
-									request = 0x00;
+									ack = 0x00;
 
-									usbcdc_send_cmd(0xF1, &request, 0x01);
+									usbcdc_send_cmd(0xF1, &ack, 0x01);
 								}
 
 								else
 								{
-									request = 0xFF;
+									ack = 0xFF;
 
-									usbcdc_send_cmd(0xF1, &request, 0x01);
+									usbcdc_send_cmd(0xF1, &ack, 0x01);
 								}
 
 								break;
@@ -339,7 +349,7 @@ void usbcdc_read_pending(void)
 					}
 
 					// Detengo el timeout
-					ticker_delete(usbcdc_timeout);
+					ticker_usbcdc_read_timeout.active = TICKER_DEACTIVATE;
 
 					usbcdc_buffer_read.read_state = 0;
 				}
@@ -362,9 +372,9 @@ void usbcdc_write_pending(void)
 	}
 }
 
-void usbcdc_timeout(void)
+void usbcdc_read_timeout(void)
 {
-	ticker_delete(usbcdc_timeout);
+	ticker_usbcdc_read_timeout.active = TICKER_DEACTIVATE;
 
 	usbcdc_buffer_read.read_state = 0;
 }
