@@ -47,22 +47,6 @@ DMA_HandleTypeDef hdma_adc1;
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
-extern esp_buffer_read_t esp_buffer_read;
-extern esp_buffer_write_t esp_buffer_write;
-
-extern esp_manager_t esp_manager;
-
-extern usbcdc_buffer_read_t usbcdc_buffer_read;
-extern usbcdc_buffer_write_t usbcdc_buffer_write;
-
-extern volatile uint8_t byte_receibe_usart;
-
-extern uint8_t debug;
-
-uint8_t request;
-
-uint8_t i;
-uint8_t j;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -72,7 +56,6 @@ static void MX_DMA_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_ADC1_Init(void);
 /* USER CODE BEGIN PFP */
-void led_blink(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -113,15 +96,7 @@ int main(void)
   MX_USART3_UART_Init();
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
-  HAL_GPIO_WritePin(ESP_RST_GPIO_Port, ESP_RST_Pin, GPIO_PIN_SET);
-
-  HAL_Delay(2000);
-
   system_init();	// Inicia la configuración del sistema
-
-  ticker_new(led_blink, LED_FAIL, TICKER_LOW_PRIORITY);	// Ticker para el led de estado
-
-  HAL_UART_Receive_IT(&huart3, (uint8_t *)(&byte_receibe_usart), 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -212,7 +187,7 @@ static void MX_ADC1_Init(void)
   */
   hadc1.Instance = ADC1;
   hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
-  hadc1.Init.ContinuousConvMode = ENABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
@@ -225,7 +200,7 @@ static void MX_ADC1_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_0;
   sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_7CYCLES_5;
+  sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -363,62 +338,6 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-void usbcdc_write_pending(void)
-{
-	if (usbcdc_buffer_write.read_index != usbcdc_buffer_write.write_index)
-	{
-		if (CDC_Transmit_FS((uint8_t *)(&usbcdc_buffer_write.data[usbcdc_buffer_write.read_index]), 1) == USBD_OK)
-		{
-			usbcdc_buffer_write.read_index++;
-		}
-	}
-}
-
-void esp_write_pending(void)
-{
-	if (esp_buffer_write.read_index != esp_buffer_write.write_index)
-	{
-		if (HAL_UART_Transmit_IT(&huart3, (uint8_t *)(&esp_buffer_write.data[esp_buffer_write.read_index]), 1) == HAL_OK)
-		{
-			esp_buffer_write.read_index++;
-		}
-	}
-}
-
-void led_blink(void)
-{
-	if (esp_manager.status == ESP_STATUS_UDP_READY)
-	{
-		ticker_change_period(led_blink, LED_OK);
-	}
-
-	else
-	{
-		ticker_change_period(led_blink, LED_FAIL);
-	}
-
-	HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-}
-
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
-{
-
-}
-
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-	if (huart->Instance == USART3)
-	{
-		esp_write_buffer_read((uint8_t *)(&byte_receibe_usart), 1);
-
-		if (debug == DEBUG_ON)
-		{
-			usbcdc_write_buffer_write((uint8_t *)(&byte_receibe_usart), 1);
-		}
-
-		HAL_UART_Receive_IT(&huart3, (uint8_t *)(&byte_receibe_usart), 1);
-	}
-}
 /* USER CODE END 4 */
 
 /**

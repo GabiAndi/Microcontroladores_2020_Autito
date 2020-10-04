@@ -1,14 +1,21 @@
 #include "esp8266.h"
 
 // Variables
-extern __attribute__ ((__section__(".user_data_flash"))) flash_data_t flash_user;
 extern flash_data_t flash_user_ram;
+
+extern UART_HandleTypeDef huart3;;
 
 esp_buffer_read_t esp_buffer_read;
 esp_buffer_write_t esp_buffer_write;
 esp_buffer_write_t esp_buffer_cmd_write;
 
 esp_manager_t esp_manager;
+
+extern uint8_t debug;
+
+extern adc_buffer_t adc_buffer;
+
+extern byte_translate_u byte_translate;
 
 uint8_t request;
 
@@ -36,6 +43,8 @@ void esp_init(void)
 	esp_manager.read_cmd_index = 0;
 	esp_manager.cmd = ESP_COMMAND_IDLE;
 	esp_manager.status = ESP_STATUS_NO_INIT;
+
+	HAL_UART_Receive_IT(&huart3, (uint8_t *)(&byte_receibe_usart), 1);
 
 	ticker_new(esp_connect_to_ap, 200, TICKER_LOW_PRIORITY);
 }
@@ -450,8 +459,50 @@ void esp_read_pending(void)
 										// Analisis del comando recibido
 										switch (esp_buffer_read.data[esp_buffer_read.payload_init - 1])
 										{
+											case 0xC0:	// Modo de envio de datos a la pc
+												if (esp_buffer_read.data[esp_buffer_read.payload_init] == ADC_SEND_DATA_ON)
+												{
+													if (esp_buffer_read.data[esp_buffer_read.payload_init] + 1 >= 50)
+													{
+														if (adc_buffer.send_esp == ADC_SEND_DATA_OFF)
+														{
+															ticker_new(send_adc_data_esp, esp_buffer_read.data[esp_buffer_read.payload_init] + 1, TICKER_LOW_PRIORITY);
+														}
+
+														else if (adc_buffer.send_esp == ADC_SEND_DATA_ON)
+														{
+															ticker_change_period(send_adc_data_esp, esp_buffer_read.data[esp_buffer_read.payload_init] + 1);
+														}
+													}
+												}
+
+												else if (esp_buffer_read.data[esp_buffer_read.payload_init] == ADC_SEND_DATA_OFF)
+												{
+													ticker_delete(send_adc_data_esp);
+												}
+
+												break;
+
 											case 0xF0:  // ALIVE
 												esp_send_cmd(0xF0, NULL, 0x00);
+
+												break;
+
+											case 0xF2:	// Envio de comando AT
+												for (uint8_t i = 0 ; i < esp_buffer_read.payload_length ; i++)
+												{
+													esp_write_buffer_write((uint8_t *)(&esp_buffer_read.data[esp_buffer_read.payload_init + i]), 1);
+												}
+
+												esp_write_buffer_write((uint8_t *)("\r\n"), 2);
+
+												break;
+
+											case 0xF3:	// Envio de datos
+												for (uint8_t i = 0 ; i < esp_buffer_read.payload_length ; i++)
+												{
+													esp_write_buffer_write((uint8_t *)(&esp_buffer_read.data[esp_buffer_read.payload_init + i]), 1);
+												}
 
 												break;
 
@@ -490,9 +541,15 @@ void esp_read_pending(void)
 	}
 }
 
-__attribute__((weak)) void esp_write_pending(void)
+void esp_write_pending(void)
 {
-
+	if (esp_buffer_write.read_index != esp_buffer_write.write_index)
+	{
+		if (HAL_UART_Transmit_IT(&huart3, (uint8_t *)(&esp_buffer_write.data[esp_buffer_write.read_index]), 1) == HAL_OK)
+		{
+			esp_buffer_write.read_index++;
+		}
+	}
 }
 
 void esp_write_send_data_pending(void)
@@ -676,5 +733,71 @@ void esp_guardian_status(void)
 
 			esp_manager.status = ESP_STATUS_NO_INIT;
 			break;
+	}
+}
+
+void send_adc_data_esp(void)
+{
+	for (uint8_t i = 0 ; i < 6 ; i++)
+	{
+		adc_buffer.mean[i] = 0;
+
+		for (uint8_t j = 0 ; j < 100 ; j += 5)
+		{
+			adc_buffer.mean[i] += adc_buffer.data[j][i];
+		}
+
+		adc_buffer.mean[i] = (uint32_t)(adc_buffer.mean[i] / 20);
+	}
+
+	uint8_t request;
+	uint8_t init_index;
+
+	esp_write_buffer_send_data_write((uint8_t *)("UNER"), 4);
+
+	request = 25;
+	esp_write_buffer_send_data_write(&request, 1);
+
+	esp_write_buffer_send_data_write((uint8_t *)(":"), 1);
+
+	init_index = esp_buffer_cmd_write.write_index;
+
+	request = 0xC0;
+	esp_write_buffer_send_data_write(&request, 1);
+
+	esp_write_buffer_send_data_write(&adc_buffer.send_esp, 1);
+
+	for (uint8_t i = 0 ; i < 6 ; i++)
+	{
+		byte_translate.u32 = adc_buffer.mean[i];
+
+		esp_write_buffer_send_data_write((uint8_t *)(&byte_translate.u8[0]), 1);
+		esp_write_buffer_send_data_write((uint8_t *)(&byte_translate.u8[1]), 1);
+		esp_write_buffer_send_data_write((uint8_t *)(&byte_translate.u8[2]), 1);
+		esp_write_buffer_send_data_write((uint8_t *)(&byte_translate.u8[3]), 1);
+	}
+
+	uint8_t checksum = xor(request, (uint8_t *)(&esp_buffer_cmd_write.data), init_index, 25);
+
+	esp_write_buffer_send_data_write(&checksum, 1);
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	if (huart->Instance == USART3)
+	{
+		esp_write_buffer_read((uint8_t *)(&byte_receibe_usart), 1);
+
+		if (debug == DEBUG_ON)
+		{
+			usbcdc_write_buffer_write((uint8_t *)(&byte_receibe_usart), 1);
+		}
+
+		HAL_UART_Receive_IT(&huart3, (uint8_t *)(&byte_receibe_usart), 1);
 	}
 }

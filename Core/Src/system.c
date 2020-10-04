@@ -4,16 +4,20 @@
 __attribute__ ((__section__(".user_data_flash"))) flash_data_t flash_user;	// Datos en flash
 flash_data_t flash_user_ram;	// Datos en ram
 
+extern esp_manager_t esp_manager;
+
 uint8_t debug;
 
-uint8_t request;
-
-uint8_t i;
-uint8_t j;
+byte_translate_u byte_translate;
 
 void system_init(void)
 {
-	memcpy(&flash_user_ram, &flash_user, sizeof(flash_data_t));	// Cargo los datos almacenados en la flash
+	HAL_GPIO_WritePin(ESP_RST_GPIO_Port, ESP_RST_Pin, GPIO_PIN_SET);
+
+	HAL_Delay(2000);
+
+	// Cargo los datos almacenados en la flash
+	memcpy(&flash_user_ram, &flash_user, sizeof(flash_data_t));
 
 	// Carga manual de los datos de conexion
 	flash_user_ram.ssid_length = 8;
@@ -80,10 +84,30 @@ void system_init(void)
 	flash_user_ram.port[3] = '0';
 	flash_user_ram.port[4] = '0';
 
+
+
 	ticker_init_core();	// Inicia la configuracion de los tickers
 
 	usbcdc_init();	// Inicia la configuracion del USB
 	esp_init();	// Inicia la configuracion del ESP
+	adc_init();	// Inicia la configuracion del ADC
+
+	ticker_new(led_blink, LED_FAIL, TICKER_LOW_PRIORITY);	// Ticker para el led de estado
+}
+
+void led_blink(void)
+{
+	if (esp_manager.status == ESP_STATUS_UDP_READY)
+	{
+		ticker_change_period(led_blink, LED_OK);
+	}
+
+	else
+	{
+		ticker_change_period(led_blink, LED_FAIL);
+	}
+
+	HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 }
 
 uint8_t xor(uint8_t cmd, uint8_t *payload, uint8_t payload_init, uint8_t payload_length)
@@ -99,7 +123,7 @@ uint8_t xor(uint8_t cmd, uint8_t *payload, uint8_t payload_init, uint8_t payload
 
 	xor ^= cmd;
 
-	for (uint8_t i = payload_init ; i < payload_init + payload_length ; i++)
+	for (uint8_t i = payload_init ; i < (uint8_t)(payload_init + payload_length) ; i++)
 	{
 		xor ^= payload[i];
 	}
@@ -107,7 +131,7 @@ uint8_t xor(uint8_t cmd, uint8_t *payload, uint8_t payload_init, uint8_t payload
 	return xor;
 }
 
-HAL_StatusTypeDef save_flash_data()
+HAL_StatusTypeDef save_flash_data(void)
 {
 	uint32_t memory_address = (uint32_t)(&flash_user);
 	uint32_t page_error = 0;
@@ -143,4 +167,16 @@ HAL_StatusTypeDef save_flash_data()
 	HAL_FLASH_Lock();
 
 	return flash_status;
+}
+
+uint8_t check_flash_data_integrity(flash_data_t *flash_data)
+{
+	uint8_t checksum = 0;
+
+	for (uint16_t i = 0 ; i < 1024 ; i++)
+	{
+		checksum ^= ((uint8_t *)(&flash_data))[i];
+	}
+
+	return checksum;
 }

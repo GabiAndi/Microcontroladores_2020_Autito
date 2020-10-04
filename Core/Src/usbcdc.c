@@ -8,6 +8,8 @@ usbcdc_buffer_write_t usbcdc_buffer_write;
 
 extern uint8_t debug;
 
+extern adc_buffer_t adc_buffer;
+
 uint8_t request;
 
 uint8_t i;
@@ -311,6 +313,16 @@ void usbcdc_read_pending(void)
 									esp_write_buffer_write((uint8_t *)(&usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + i]), 1);
 								}
 
+								esp_write_buffer_write((uint8_t *)("\r\n"), 2);
+
+								break;
+
+							case 0xF3:	// Envio de datos
+								for (uint8_t i = 0 ; i < usbcdc_buffer_read.payload_length ; i++)
+								{
+									esp_write_buffer_write((uint8_t *)(&usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + i]), 1);
+								}
+
 								break;
 
 							default:	// Comando no valido
@@ -339,9 +351,15 @@ void usbcdc_read_pending(void)
 	}
 }
 
-__attribute__((weak)) void usbcdc_write_pending(void)
+void usbcdc_write_pending(void)
 {
-
+	if (usbcdc_buffer_write.read_index != usbcdc_buffer_write.write_index)
+	{
+		if (CDC_Transmit_FS((uint8_t *)(&usbcdc_buffer_write.data[usbcdc_buffer_write.read_index]), 1) == USBD_OK)
+		{
+			usbcdc_buffer_write.read_index++;
+		}
+	}
 }
 
 void usbcdc_timeout(void)
