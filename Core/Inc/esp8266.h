@@ -124,6 +124,6 @@ void esp_hard_reset_stop(void);
 
 void esp_guardian_status(void);
 
-void send_adc_data_esp(void);
+void esp_send_adc_data(void);
 
 #endif /* INC_ESP8266_H_ */

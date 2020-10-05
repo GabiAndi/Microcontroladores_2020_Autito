@@ -1,23 +1,15 @@
 #ifndef INC_SYSTEM_H_
 #define INC_SYSTEM_H_
 
-/* 1) ¡AGREGAR! (Preguntar a German)
- *
- * Es necesario un control de integridad para verificar si los datos
- * contenidos en la flash son valores aleatorios o iniciales
- *
- */
-
-/* 2) ¡MEJORAR!
+/* 1) ¡MEJORAR!
  *
  * Atoi en la lectura de datos
  *
  */
 
-/* 3) ¡VER MEJORA!
+/* 2) ¡MEJORAR!
  *
- * En la copia de datos del buffer de comandos de esp al buffer de envio
- * ver la posibilidad de mejorar el while de copia
+ * sprintf en el envio de datos
  *
  */
 
@@ -66,9 +58,9 @@ typedef struct
 	uint8_t port[10];
 	uint8_t port_length;
 
-	uint8_t checksum;
-
 	uint8_t padding[1024 - 31 - 31 - 21 - 21 - 11 - 1];
+
+	uint8_t checksum;
 }__attribute__ ((packed)) flash_data_t;
 
 typedef union

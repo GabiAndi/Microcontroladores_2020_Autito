@@ -12,12 +12,14 @@
 
 #define ADC_BUFFER_LENGTH			100
 
+#define ADC_MEAN_STEP				5
+
 // typedef
 typedef struct
 {
-	volatile uint32_t data[ADC_BUFFER_LENGTH][6];
+	volatile uint16_t data[ADC_BUFFER_LENGTH][6];
 
-	volatile uint32_t mean[6];
+	volatile uint16_t mean[6];
 
 	uint8_t data_index;
 
@@ -28,6 +30,6 @@ typedef struct
 // Funciones
 void adc_init(void);
 
-void adc_start_ticker(void);
+void adc_capture(void);
 
 #endif /* INC_ADC_H_ */

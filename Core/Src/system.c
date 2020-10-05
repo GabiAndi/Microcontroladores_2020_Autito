@@ -22,7 +22,16 @@ void system_init(void)
 
 	HAL_Delay(1000);	// Espero 1 segundo para eliminar los datos basura
 
-	memcpy(&flash_user_ram, &flash_user, sizeof(flash_data_t));	// Cargo los datos almacenados en la flash
+	// Compruebo la integridad de los datos
+	if (flash_user.checksum == check_flash_data_integrity(&flash_user))
+	{
+		memcpy(&flash_user_ram, &flash_user, sizeof(flash_data_t));	// Cargo los datos almacenados en la flash
+	}
+
+	else
+	{
+		memset(&flash_user_ram, 0, sizeof(flash_data_t));	// Cargo los datos con valor 0
+	}
 
 	// Carga manual de los datos de conexion (Pruebas)
 	flash_user_ram.ssid_length = 10;
@@ -109,7 +118,7 @@ void system_init(void)
 	// Inicializacion de los modulos
 	usbcdc_init();	// Inicia la configuracion del USB
 	esp_init();	// Inicia la configuracion del ESP
-	//adc_init();	// Inicia la configuracion del ADC
+	adc_init();	// Inicia la configuracion del ADC
 }
 
 void system_led_status(void)
@@ -165,6 +174,8 @@ HAL_StatusTypeDef save_flash_data(void)
 
 	flash_status = HAL_FLASHEx_Erase(&flash_erase, &page_error);
 
+	flash_user_ram.checksum = check_flash_data_integrity(&flash_user_ram);	// Calculo el checksum de los datos en RAM
+
 	if (flash_status == HAL_OK)
 	{
 		for (uint16_t i = 0 ; i < 512 ; i++)
@@ -190,9 +201,9 @@ uint8_t check_flash_data_integrity(flash_data_t *flash_data)
 {
 	uint8_t checksum = 0;
 
-	for (uint16_t i = 0 ; i < 1024 ; i++)
+	for (uint16_t i = 0 ; i < 1023 ; i++)
 	{
-		checksum ^= ((uint8_t *)(&flash_data))[i];
+		checksum ^= ((uint8_t *)(flash_data))[i];
 	}
 
 	return checksum;

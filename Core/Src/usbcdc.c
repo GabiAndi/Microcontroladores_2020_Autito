@@ -11,10 +11,10 @@ extern flash_data_t flash_user_ram;
 usbcdc_buffer_read_t usbcdc_buffer_read;
 usbcdc_buffer_write_t usbcdc_buffer_write;
 
+extern adc_buffer_t adc_buffer;
+
 // Flag de depuracion via USB
 extern uint8_t esp_to_usb_debug;
-
-extern adc_buffer_t adc_buffer;
 
 // Variables auxiliares
 uint8_t ack;
