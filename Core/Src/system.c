@@ -18,69 +18,73 @@ byte_translate_u byte_translate;
 
 void system_init(void)
 {
-	HAL_GPIO_WritePin(ESP_RST_GPIO_Port, ESP_RST_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(ESP_RST_GPIO_Port, ESP_RST_Pin, GPIO_PIN_SET);	// Inicio la ESP
 
-	HAL_Delay(2000);
+	HAL_Delay(1000);	// Espero 1 segundo para eliminar los datos basura
 
-	// Cargo los datos almacenados en la flash
-	memcpy(&flash_user_ram, &flash_user, sizeof(flash_data_t));
+	memcpy(&flash_user_ram, &flash_user, sizeof(flash_data_t));	// Cargo los datos almacenados en la flash
 
-	// Carga manual de los datos de conexion
-	flash_user_ram.ssid_length = 8;
+	// Carga manual de los datos de conexion (Pruebas)
+	flash_user_ram.ssid_length = 10;
 
-	flash_user_ram.ssid[0] = 'G';
-	flash_user_ram.ssid[1] = 'a';
-	flash_user_ram.ssid[2] = 'b';
-	flash_user_ram.ssid[3] = 'i';
-	flash_user_ram.ssid[4] = '-';
-	flash_user_ram.ssid[5] = 'R';
-	flash_user_ram.ssid[6] = 'E';
-	flash_user_ram.ssid[7] = 'D';
+	flash_user_ram.ssid[0] = 'T';
+	flash_user_ram.ssid[1] = 'P';
+	flash_user_ram.ssid[2] = 'L';
+	flash_user_ram.ssid[3] = 'I';
+	flash_user_ram.ssid[4] = 'N';
+	flash_user_ram.ssid[5] = 'K';
+	flash_user_ram.ssid[6] = '_';
+	flash_user_ram.ssid[7] = '2';
+	flash_user_ram.ssid[8] = '4';
+	flash_user_ram.ssid[9] = 'G';
 
-	flash_user_ram.psw_length = 17;
+	flash_user_ram.psw_length = 14;
 
-	flash_user_ram.psw[0] = 'G';
+	flash_user_ram.psw[0] = 'B';
 	flash_user_ram.psw[1] = 'a';
-	flash_user_ram.psw[2] = 'b';
-	flash_user_ram.psw[3] = 'i';
-	flash_user_ram.psw[4] = 'A';
-	flash_user_ram.psw[5] = 'n';
-	flash_user_ram.psw[6] = 'd';
-	flash_user_ram.psw[7] = 'i';
-	flash_user_ram.psw[8] = '2';
-	flash_user_ram.psw[9] = '6';
-	flash_user_ram.psw[10] = '0';
-	flash_user_ram.psw[11] = '4';
-	flash_user_ram.psw[12] = '0';
-	flash_user_ram.psw[13] = '1';
-	flash_user_ram.psw[14] = '0';
-	flash_user_ram.psw[15] = '2';
-	flash_user_ram.psw[16] = '.';
+	flash_user_ram.psw[2] = 's';
+	flash_user_ram.psw[3] = 'e';
+	flash_user_ram.psw[4] = 'x';
+	flash_user_ram.psw[5] = 'B';
+	flash_user_ram.psw[6] = '1';
+	flash_user_ram.psw[7] = 'A';
+	flash_user_ram.psw[8] = 'u';
+	flash_user_ram.psw[9] = '1';
+	flash_user_ram.psw[10] = '9';
+	flash_user_ram.psw[11] = '7';
+	flash_user_ram.psw[12] = '4';
+	flash_user_ram.psw[13] = '*';
 
-	flash_user_ram.ip_mcu_length = 9;
+	flash_user_ram.ip_mcu_length = 13;
 
 	flash_user_ram.ip_mcu[0] = '1';
-	flash_user_ram.ip_mcu[1] = '0';
-	flash_user_ram.ip_mcu[2] = '.';
-	flash_user_ram.ip_mcu[3] = '0';
-	flash_user_ram.ip_mcu[4] = '.';
-	flash_user_ram.ip_mcu[5] = '0';
-	flash_user_ram.ip_mcu[6] = '.';
-	flash_user_ram.ip_mcu[7] = '1';
+	flash_user_ram.ip_mcu[1] = '9';
+	flash_user_ram.ip_mcu[2] = '2';
+	flash_user_ram.ip_mcu[3] = '.';
+	flash_user_ram.ip_mcu[4] = '1';
+	flash_user_ram.ip_mcu[5] = '6';
+	flash_user_ram.ip_mcu[6] = '8';
+	flash_user_ram.ip_mcu[7] = '.';
 	flash_user_ram.ip_mcu[8] = '0';
+	flash_user_ram.ip_mcu[9] = '.';
+	flash_user_ram.ip_mcu[10] = '1';
+	flash_user_ram.ip_mcu[11] = '0';
+	flash_user_ram.ip_mcu[12] = '0';
 
-	flash_user_ram.ip_pc_length = 10;
+	flash_user_ram.ip_pc_length = 12;
 
 	flash_user_ram.ip_pc[0] = '1';
-	flash_user_ram.ip_pc[1] = '0';
-	flash_user_ram.ip_pc[2] = '.';
-	flash_user_ram.ip_pc[3] = '0';
-	flash_user_ram.ip_pc[4] = '.';
-	flash_user_ram.ip_pc[5] = '0';
-	flash_user_ram.ip_pc[6] = '.';
-	flash_user_ram.ip_pc[7] = '1';
+	flash_user_ram.ip_pc[1] = '9';
+	flash_user_ram.ip_pc[2] = '2';
+	flash_user_ram.ip_pc[3] = '.';
+	flash_user_ram.ip_pc[4] = '1';
+	flash_user_ram.ip_pc[5] = '6';
+	flash_user_ram.ip_pc[6] = '8';
+	flash_user_ram.ip_pc[7] = '.';
 	flash_user_ram.ip_pc[8] = '0';
-	flash_user_ram.ip_pc[9] = '0';
+	flash_user_ram.ip_pc[9] = '.';
+	flash_user_ram.ip_pc[10] = '1';
+	flash_user_ram.ip_pc[11] = '7';
 
 	flash_user_ram.port_length = 5;
 
@@ -94,7 +98,7 @@ void system_init(void)
 
 	// Ticker para el led de estado
 	ticker_system_led_status.ms_count = 0;
-	ticker_system_led_status.ms_max = 250;
+	ticker_system_led_status.ms_max = LED_FAIL;
 	ticker_system_led_status.calls = 0;
 	ticker_system_led_status.priority = TICKER_LOW_PRIORITY;
 	ticker_system_led_status.ticker_function = system_led_status;

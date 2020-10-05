@@ -78,7 +78,7 @@ void esp_init(void)
 
 	// Inicializacion del ticker de read timeout
 	ticker_esp_timeout_read.ms_count = 0;
-	ticker_esp_timeout_read.ms_max = 100;
+	ticker_esp_timeout_read.ms_max = 200;
 	ticker_esp_timeout_read.calls = 0;
 	ticker_esp_timeout_read.priority = TICKER_LOW_PRIORITY;
 	ticker_esp_timeout_read.ticker_function = esp_timeout_read;
@@ -106,7 +106,7 @@ void esp_init(void)
 
 	ticker_new(&ticker_esp_connect_to_ap);
 
-	// Inicializacion del ticker de autoconectado
+	// Inicializacion del ticker de hard reset
 	ticker_esp_hard_reset.ms_count = 0;
 	ticker_esp_hard_reset.ms_max = 200;
 	ticker_esp_hard_reset.calls = 0;
@@ -165,21 +165,30 @@ void esp_read_pending(void)
 		switch (esp_manager.read_state)
 		{
 			case 0:
-				if (esp_buffer_read.data[esp_buffer_read.read_index] != '\r' &&
-						esp_buffer_read.data[esp_buffer_read.read_index] != '\n')
+				if ((esp_buffer_read.data[esp_buffer_read.read_index] != '\r') &&
+						(esp_buffer_read.data[esp_buffer_read.read_index] != '\n'))
 				{
+					ticker_esp_timeout_read.ms_count = 0;
 					ticker_esp_timeout_read.active = TICKER_ACTIVE;
 
 					esp_manager.cmd_init = esp_buffer_read.read_index;
 
-					esp_manager.read_state = 1;
+					if ((esp_buffer_read.data[esp_buffer_read.read_index] == '>'))
+					{
+						esp_manager.read_state = 3;
+					}
+
+					else
+					{
+						esp_manager.read_state = 1;
+					}
 				}
 
 				break;
 
 			case 1:
-				if (esp_buffer_read.data[esp_buffer_read.read_index] == '\r' ||
-						esp_buffer_read.data[esp_buffer_read.read_index] == '\n')
+				if ((esp_buffer_read.data[esp_buffer_read.read_index] == '\r') ||
+						(esp_buffer_read.data[esp_buffer_read.read_index] == '\n'))
 				{
 					ticker_esp_timeout_read.active = TICKER_DEACTIVATE;
 
@@ -191,6 +200,8 @@ void esp_read_pending(void)
 				break;
 
 			case 2:
+				esp_manager.read_state = 0;
+
 				if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("AT"), 2))
 				{
 					esp_manager.cmd = ESP_COMMAND_AT;
@@ -199,6 +210,11 @@ void esp_read_pending(void)
 				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_init + 13, (uint8_t *)("AT+CWMODE_CUR="), 14))
 				{
 					esp_manager.cmd = ESP_COMMAND_AT_CWMODE;
+				}
+
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_init + 12, (uint8_t *)("AT+CWJAP_CUR="), 13))
+				{
+					esp_manager.cmd = ESP_COMMAND_AT_CWJAP;
 				}
 
 				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("+CWJAP:1"), 8))
@@ -265,6 +281,7 @@ void esp_read_pending(void)
 
 				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("STATUS:3"), 8))
 				{
+					esp_manager.connected = ESP_CONNECTED;
 					esp_manager.udp = ESP_UDP_INIT;
 				}
 
@@ -317,11 +334,6 @@ void esp_read_pending(void)
 							esp_manager.udp = ESP_UDP_INIT;
 
 							break;
-
-						case ESP_COMMAND_AT_CIPSEND:
-							esp_manager.send = ESP_SEND_READY;
-
-							break;
 					}
 
 					esp_manager.cmd = ESP_COMMAND_IDLE;
@@ -360,6 +372,7 @@ void esp_read_pending(void)
 
 						case ESP_COMMAND_AT_CIPSEND:
 							esp_manager.error = ESP_ERROR_CMD_SEND;
+							esp_manager.send = ESP_SEND_NO_INIT;
 
 							break;
 					}
@@ -389,7 +402,7 @@ void esp_read_pending(void)
 
 				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_end, (uint8_t *)("SEND FAIL"), 9))
 				{
-					esp_manager.send = ESP_SEND_OK;
+					esp_manager.send = ESP_SEND_NO_INIT;
 					esp_manager.error = ESP_ERROR_SEND_DATA;
 
 					esp_manager.cmd = ESP_COMMAND_IDLE;
@@ -415,7 +428,7 @@ void esp_read_pending(void)
 					esp_manager.cmd_index = i + 1;
 					esp_buffer_read.read_state = 0;
 
-					while (esp_manager.cmd_index != (uint8_t)(i + esp_manager.len_uint))
+					while (esp_manager.cmd_index != (uint8_t)(i + esp_manager.len_uint - 1))
 					{
 						switch (esp_buffer_read.read_state)
 						{
@@ -424,6 +437,7 @@ void esp_read_pending(void)
 								{
 									esp_buffer_read.read_state = 1;
 
+									ticker_esp_timeout_read.ms_count = 0;
 									ticker_esp_timeout_read.active = TICKER_ACTIVE;
 								}
 
@@ -571,6 +585,7 @@ void esp_read_pending(void)
 									ticker_esp_timeout_read.active = TICKER_DEACTIVATE;
 
 									esp_buffer_read.read_state = 0;
+									esp_manager.read_state = 0;
 								}
 
 								break;
@@ -578,9 +593,21 @@ void esp_read_pending(void)
 
 						esp_manager.cmd_index++;
 					}
+
+					esp_manager.read_state = 0;
 				}
 
-				esp_manager.read_state = 0;
+				break;
+
+			case 3:
+				if ((esp_buffer_read.data[esp_buffer_read.read_index] == ' '))
+				{
+					ticker_esp_timeout_read.active = TICKER_DEACTIVATE;
+
+					esp_manager.send = ESP_SEND_READY;
+
+					esp_manager.read_state = 0;
+				}
 
 				break;
 		}
@@ -629,6 +656,7 @@ void esp_write_send_data_pending(void)
 
 				esp_write_buffer_write((uint8_t *)("\r\n"), 2);
 
+				ticker_esp_timeout_send.ms_count = 0;
 				ticker_esp_timeout_send.active = TICKER_ACTIVE;
 
 				esp_manager.send = ESP_SEND_WAITING_OK;
@@ -807,6 +835,28 @@ void esp_hard_reset(void)
 {
 	HAL_GPIO_WritePin(ESP_RST_GPIO_Port, ESP_RST_Pin, GPIO_PIN_RESET);
 
+	// Inicializacion del esp manager
+	esp_manager.status = ESP_STATUS_NO_INIT;
+	esp_manager.station = ESP_STATION_NO_INIT;
+	esp_manager.error = ESP_ERROR_OK;
+	esp_manager.connected = ESP_DISCONNECTED;
+	esp_manager.udp = ESP_UDP_NO_INIT;
+	esp_manager.send = ESP_SEND_NO_INIT;
+
+	esp_manager.read_state = 0;
+
+	esp_manager.cmd = ESP_COMMAND_IDLE;
+
+	esp_manager.cmd_init = 0;
+	esp_manager.cmd_end = 0;
+
+	esp_manager.cmd_index = 0;
+
+	esp_manager.send_data_length = 0;
+
+	esp_manager.auto_connection = 0;
+
+	ticker_esp_hard_reset.ms_count = 0;
 	ticker_esp_hard_reset.active = TICKER_ACTIVE;
 }
 
@@ -816,19 +866,20 @@ void esp_hard_reset_stop(void)
 
 	ticker_esp_hard_reset.active = TICKER_DEACTIVATE;
 
+	ticker_esp_connect_to_ap.ms_count = 0;
 	ticker_esp_connect_to_ap.active = TICKER_ACTIVE;
 }
 
 void esp_guardian_status(void)
 {
-	/*switch (esp_manager.status)
+	// Manejo de errores
+	switch (esp_manager.error)
 	{
-		case ESP_STATUS_DISCONNECTED:
-			esp_hard_reset();
+		case ESP_ERROR_SEND_DATA:
+			esp_manager.error = ESP_ERROR_OK;
 
-			esp_manager.status = ESP_STATUS_NO_INIT;
 			break;
-	}*/
+	}
 }
 
 /*void send_adc_data_esp(void)

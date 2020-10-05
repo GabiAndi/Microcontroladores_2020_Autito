@@ -86,6 +86,7 @@ void usbcdc_read_pending(void)
 				{
 					usbcdc_buffer_read.read_state = 1;
 
+					ticker_usbcdc_read_timeout.ms_count = 0;
 					ticker_usbcdc_read_timeout.active = TICKER_ACTIVE;
 				}
 
