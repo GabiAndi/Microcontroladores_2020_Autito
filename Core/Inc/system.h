@@ -78,7 +78,7 @@ void system_init(void);
 
 void system_led_status(void);
 
-uint8_t xor(uint8_t cmd, uint8_t *payload, uint8_t payload_init, uint8_t payload_length);
+uint8_t check_xor(uint8_t cmd, uint8_t *payload, uint8_t payload_init, uint8_t payload_length);
 
 HAL_StatusTypeDef save_flash_data(void);
 uint8_t check_flash_data_integrity(flash_data_t *flash_data);

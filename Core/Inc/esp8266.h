@@ -56,8 +56,8 @@ typedef struct
 	volatile uint8_t write_index;
 
 	volatile uint8_t read_state;
-	uint8_t payload_length;
-	uint8_t payload_init;
+	volatile uint8_t payload_length;
+	volatile uint8_t payload_init;
 }esp_buffer_read_t;
 
 typedef struct

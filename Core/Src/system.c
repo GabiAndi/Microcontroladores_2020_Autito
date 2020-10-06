@@ -136,25 +136,25 @@ void system_led_status(void)
 	HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 }
 
-uint8_t xor(uint8_t cmd, uint8_t *payload, uint8_t payload_init, uint8_t payload_length)
+uint8_t check_xor(uint8_t cmd, uint8_t *payload, uint8_t payload_init, uint8_t payload_length)
 {
-	uint8_t xor = 0x00;
+	uint8_t val_xor = 0x00;
 
-	xor ^= 'U';
-	xor ^= 'N';
-	xor ^= 'E';
-	xor ^= 'R';
-	xor ^= payload_length;
-	xor ^= ':';
+	val_xor ^= 'U';
+	val_xor ^= 'N';
+	val_xor ^= 'E';
+	val_xor ^= 'R';
+	val_xor ^= payload_length;
+	val_xor ^= ':';
 
-	xor ^= cmd;
+	val_xor ^= cmd;
 
 	for (uint8_t i = payload_init ; i < (uint8_t)(payload_init + payload_length) ; i++)
 	{
-		xor ^= payload[i];
+		val_xor ^= payload[i];
 	}
 
-	return xor;
+	return val_xor;
 }
 
 HAL_StatusTypeDef save_flash_data(void)

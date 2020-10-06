@@ -85,7 +85,7 @@ void usbcdc_send_cmd(uint8_t cmd, uint8_t *payload, uint8_t length)
 	usbcdc_write_buffer_write(&cmd, 1);
 	usbcdc_write_buffer_write(payload, length);
 
-	uint8_t checksum = xor(cmd, payload, 0, length);
+	uint8_t checksum = check_xor(cmd, payload, 0, length);
 
 	usbcdc_write_buffer_write(&checksum, 1);
 }
@@ -178,7 +178,7 @@ void usbcdc_read_pending(void)
 				if (usbcdc_buffer_read.read_index == (usbcdc_buffer_read.payload_init + usbcdc_buffer_read.payload_length))
 				{
 					// Se comprueba la integridad de datos
-					if (xor(usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init - 1], (uint8_t *)(usbcdc_buffer_read.data),
+					if (check_xor(usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init - 1], (uint8_t *)(usbcdc_buffer_read.data),
 							usbcdc_buffer_read.payload_init, usbcdc_buffer_read.payload_length)
 							== usbcdc_buffer_read.data[usbcdc_buffer_read.read_index])
 					{
@@ -439,7 +439,7 @@ void usbcdc_send_adc_data(void)
 		adc_buffer.mean[i] = (uint16_t)(adc_buffer.mean[i] / (ADC_BUFFER_LENGTH / ADC_MEAN_STEP));
 	}
 
-	uint8_t cmd_index;
+	uint8_t init_index;
 
 	usbcdc_write_buffer_write((uint8_t *)("UNER"), 4);
 
@@ -448,10 +448,10 @@ void usbcdc_send_adc_data(void)
 
 	usbcdc_write_buffer_write((uint8_t *)(":"), 1);
 
-	cmd_index = usbcdc_buffer_write.write_index;
-
 	ack = 0xC0;
 	usbcdc_write_buffer_write(&ack, 1);
+
+	init_index = usbcdc_buffer_write.write_index;
 
 	usbcdc_write_buffer_write(&adc_buffer.send_esp, 1);
 
@@ -463,7 +463,7 @@ void usbcdc_send_adc_data(void)
 		usbcdc_write_buffer_write((uint8_t *)(&byte_translate.u8[1]), 1);
 	}
 
-	uint8_t checksum = xor(ack, (uint8_t *)(&usbcdc_buffer_write.data), cmd_index, 13);
+	uint8_t checksum = check_xor(ack, (uint8_t *)(&usbcdc_buffer_write.data), init_index, 13);
 
 	usbcdc_write_buffer_write(&checksum, 1);
 }

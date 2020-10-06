@@ -165,7 +165,7 @@ void esp_send_cmd(uint8_t cmd, uint8_t *payload, uint8_t length)
 	esp_write_buffer_send_data_write(&cmd, 1);
 	esp_write_buffer_send_data_write(payload, length);
 
-	uint8_t checksum = xor(cmd, payload, 0, length);
+	uint8_t checksum = check_xor(cmd, payload, 0, length);
 
 	esp_write_buffer_send_data_write(&checksum, 1);
 }
@@ -526,7 +526,7 @@ void esp_read_pending(void)
 								if (esp_manager.cmd_index == (esp_buffer_read.payload_init + esp_buffer_read.payload_length))
 								{
 									// Se comprueba la integridad de datos
-									if (xor(esp_buffer_read.data[esp_buffer_read.payload_init - 1], (uint8_t *)(esp_buffer_read.data),
+									if (check_xor(esp_buffer_read.data[esp_buffer_read.payload_init - 1], (uint8_t *)(esp_buffer_read.data),
 											esp_buffer_read.payload_init, esp_buffer_read.payload_length)
 											== esp_buffer_read.data[esp_manager.cmd_index])
 									{
@@ -914,7 +914,7 @@ void esp_send_adc_data(void)
 		adc_buffer.mean[i] = (uint16_t)(adc_buffer.mean[i] / (ADC_BUFFER_LENGTH / ADC_MEAN_STEP));
 	}
 
-	uint8_t cmd_index;
+	uint8_t init_index;
 
 	esp_write_buffer_send_data_write((uint8_t *)("UNER"), 4);
 
@@ -923,10 +923,10 @@ void esp_send_adc_data(void)
 
 	esp_write_buffer_send_data_write((uint8_t *)(":"), 1);
 
-	cmd_index = esp_buffer_cmd_write.write_index;
-
 	ack = 0xC0;
 	esp_write_buffer_send_data_write(&ack, 1);
+
+	init_index = esp_buffer_cmd_write.write_index;
 
 	esp_write_buffer_send_data_write(&adc_buffer.send_esp, 1);
 
@@ -938,7 +938,7 @@ void esp_send_adc_data(void)
 		esp_write_buffer_send_data_write((uint8_t *)(&byte_translate.u8[1]), 1);
 	}
 
-	uint8_t checksum = xor(ack, (uint8_t *)(&esp_buffer_cmd_write.data), cmd_index, 13);
+	uint8_t checksum = check_xor(ack, (uint8_t *)(&esp_buffer_cmd_write.data), init_index, 13);
 
 	esp_write_buffer_send_data_write(&checksum, 1);
 }
