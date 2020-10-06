@@ -118,7 +118,7 @@ void esp_init(void)
 
 	ticker_new(&ticker_esp_hard_reset);
 
-	// Inicializacion del ticker de hard reset
+	// Inicializacion del ticker para envio de datos del adc
 	ticker_esp_send_adc_data.ms_count = 0;
 	ticker_esp_send_adc_data.ms_max = 500;
 	ticker_esp_send_adc_data.calls = 0;
@@ -536,19 +536,19 @@ void esp_read_pending(void)
 											case 0xC0:	// Modo de envio de datos a la pc
 												if (esp_buffer_read.data[esp_buffer_read.payload_init] == ADC_SEND_DATA_ON)
 												{
-													if (esp_buffer_read.data[esp_buffer_read.payload_init] + 1 >= 50)
+													if (esp_buffer_read.data[esp_buffer_read.payload_init + 1] >= 50)
 													{
 														if (adc_buffer.send_esp == ADC_SEND_DATA_OFF)
 														{
 															adc_buffer.send_esp = ADC_SEND_DATA_ON;
 
-															ticker_esp_send_adc_data.ms_max = esp_buffer_read.data[esp_buffer_read.payload_init] + 1;
+															ticker_esp_send_adc_data.ms_max = esp_buffer_read.data[esp_buffer_read.payload_init + 1];
 															ticker_esp_send_adc_data.active = TICKER_ACTIVE;
 														}
 
 														else if (adc_buffer.send_esp == ADC_SEND_DATA_ON)
 														{
-															ticker_esp_send_adc_data.ms_max = esp_buffer_read.data[esp_buffer_read.payload_init] + 1;
+															ticker_esp_send_adc_data.ms_max = esp_buffer_read.data[esp_buffer_read.payload_init + 1];
 														}
 													}
 												}
@@ -892,7 +892,7 @@ void esp_guardian_status(void)
 	// Manejo de errores
 	switch (esp_manager.error)
 	{
-		case ESP_ERROR_SEND_DATA:
+		case ESP_ERROR_SEND_DATA:	// Error al enviar un dato
 			esp_manager.error = ESP_ERROR_OK;
 
 			break;

@@ -36,4 +36,6 @@ void usbcdc_write_pending(void);
 
 void usbcdc_read_timeout(void);
 
+void usbcdc_send_adc_data(void);
+
 #endif /* INC_USBCDC_H_ */

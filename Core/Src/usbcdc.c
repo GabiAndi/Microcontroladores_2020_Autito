@@ -4,6 +4,8 @@
 // Tickers
 ticker_t ticker_usbcdc_read_timeout;
 
+ticker_t ticker_usbcdc_send_adc_data;
+
 // Datos guardados
 extern flash_data_t flash_user_ram;
 
@@ -15,6 +17,9 @@ extern adc_buffer_t adc_buffer;
 
 // Flag de depuracion via USB
 extern uint8_t esp_to_usb_debug;
+
+// Variable de conversion de datos
+extern byte_translate_u byte_translate;
 
 // Variables auxiliares
 uint8_t ack;
@@ -41,6 +46,16 @@ void usbcdc_init(void)
 	ticker_usbcdc_read_timeout.active = TICKER_DEACTIVATE;
 
 	ticker_new(&ticker_usbcdc_read_timeout);
+
+	// Inicializacion del ticker para envio de datos del adc
+	ticker_usbcdc_send_adc_data.ms_count = 0;
+	ticker_usbcdc_send_adc_data.ms_max = 500;
+	ticker_usbcdc_send_adc_data.calls = 0;
+	ticker_usbcdc_send_adc_data.priority = TICKER_LOW_PRIORITY;
+	ticker_usbcdc_send_adc_data.ticker_function = usbcdc_send_adc_data;
+	ticker_usbcdc_send_adc_data.active = TICKER_DEACTIVATE;
+
+	ticker_new(&ticker_usbcdc_send_adc_data);
 }
 
 void usbcdc_write_buffer_write(uint8_t *data, uint8_t length)
@@ -170,6 +185,35 @@ void usbcdc_read_pending(void)
 						// Analisis del comando recibido
 						switch (usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init - 1])
 						{
+							case 0xC0:	// Modo de envio de datos a la pc
+								if (usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init] == ADC_SEND_DATA_ON)
+								{
+									if (usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 1] >= 50)
+									{
+										if (adc_buffer.send_usb == ADC_SEND_DATA_OFF)
+										{
+											adc_buffer.send_usb = ADC_SEND_DATA_ON;
+
+											ticker_usbcdc_send_adc_data.ms_max = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 1];
+											ticker_usbcdc_send_adc_data.active = TICKER_ACTIVE;
+										}
+
+										else if (adc_buffer.send_usb == ADC_SEND_DATA_ON)
+										{
+											ticker_usbcdc_send_adc_data.ms_max = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 1];
+										}
+									}
+								}
+
+								else if (usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init] == ADC_SEND_DATA_OFF)
+								{
+									adc_buffer.send_usb = ADC_SEND_DATA_OFF;
+
+									ticker_usbcdc_send_adc_data.active = TICKER_DEACTIVATE;
+								}
+
+								break;
+
 							case 0xD0:	// Seteo de ssid
 								flash_user_ram.ssid_length = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init];
 
@@ -378,4 +422,48 @@ void usbcdc_read_timeout(void)
 	ticker_usbcdc_read_timeout.active = TICKER_DEACTIVATE;
 
 	usbcdc_buffer_read.read_state = 0;
+}
+
+void usbcdc_send_adc_data(void)
+{
+	// Calculo la media de los datos almacenados en el buffer
+	for (uint8_t i = 0 ; i < 6 ; i++)
+	{
+		adc_buffer.mean[i] = 0;
+
+		for (uint8_t j = 0 ; j < ADC_BUFFER_LENGTH ; j += ADC_MEAN_STEP)
+		{
+			adc_buffer.mean[i] += adc_buffer.data[j][i];
+		}
+
+		adc_buffer.mean[i] = (uint16_t)(adc_buffer.mean[i] / (ADC_BUFFER_LENGTH / ADC_MEAN_STEP));
+	}
+
+	uint8_t cmd_index;
+
+	usbcdc_write_buffer_write((uint8_t *)("UNER"), 4);
+
+	ack = 13;
+	usbcdc_write_buffer_write(&ack, 1);
+
+	usbcdc_write_buffer_write((uint8_t *)(":"), 1);
+
+	cmd_index = usbcdc_buffer_write.write_index;
+
+	ack = 0xC0;
+	usbcdc_write_buffer_write(&ack, 1);
+
+	usbcdc_write_buffer_write(&adc_buffer.send_esp, 1);
+
+	for (uint8_t i = 0 ; i < 6 ; i++)
+	{
+		byte_translate.u16[0] = adc_buffer.mean[i];
+
+		usbcdc_write_buffer_write((uint8_t *)(&byte_translate.u8[0]), 1);
+		usbcdc_write_buffer_write((uint8_t *)(&byte_translate.u8[1]), 1);
+	}
+
+	uint8_t checksum = xor(ack, (uint8_t *)(&usbcdc_buffer_write.data), cmd_index, 13);
+
+	usbcdc_write_buffer_write(&checksum, 1);
 }

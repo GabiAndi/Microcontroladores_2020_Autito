@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 // Definiciones
-#define TICKER_MAX_USE                 					10	// Tickers como maximo
+#define TICKER_MAX_USE                 					15	// Tickers como maximo
 
 #define TICKER_LOW_PRIORITY								0	// Prioridad baja (se ejecuta en blucle principal)
 #define TICKER_HIGH_PRIORITY							1	// Prioridad alta (se ejecuta en interrupcion)
