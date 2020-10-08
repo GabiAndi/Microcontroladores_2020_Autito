@@ -1,18 +1,6 @@
 #ifndef INC_SYSTEM_H_
 #define INC_SYSTEM_H_
 
-/* 1) ¡MEJORAR!
- *
- * Atoi en la lectura de datos
- *
- */
-
-/* 2) ¡MEJORAR!
- *
- * sprintf en el envio de datos
- *
- */
-
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
