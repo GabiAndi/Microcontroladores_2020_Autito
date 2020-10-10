@@ -21,10 +21,12 @@ typedef struct
 
 	volatile uint16_t mean[6];
 
-	uint8_t data_index;
+	volatile uint32_t mean_aux;
 
-	uint8_t send_esp;
-	uint8_t send_usb;
+	volatile uint8_t data_index;
+
+	volatile uint8_t send_esp;
+	volatile uint8_t send_usb;
 }adc_buffer_t;
 
 // Funciones

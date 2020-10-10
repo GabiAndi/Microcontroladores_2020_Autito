@@ -4,11 +4,8 @@
 // Tickers
 ticker_t ticker_esp_timeout_read;
 ticker_t ticker_esp_timeout_send;
-
 ticker_t ticker_esp_connect_to_ap;
-
 ticker_t ticker_esp_hard_reset;
-
 ticker_t ticker_esp_send_adc_data;
 
 // Datos guardados
@@ -560,6 +557,121 @@ void esp_read_pending(void)
 
 												break;
 
+											case 0xD0:	// Seteo de ssid
+												flash_user_ram.ssid_length = esp_buffer_read.data[esp_buffer_read.payload_init];
+
+												i = 0;
+												j = esp_buffer_read.payload_init + 1;
+
+												while (i < flash_user_ram.ssid_length)
+												{
+													flash_user_ram.ssid[i] = esp_buffer_read.data[j];
+
+													i++;
+													j++;
+												}
+
+												ack = 0x00;
+
+												esp_send_cmd(0xD0, &ack, 0x01);
+
+												break;
+
+											case 0xD1:	// Seteo de psw
+												flash_user_ram.psw_length = esp_buffer_read.data[esp_buffer_read.payload_init];
+
+												i = 0;
+												j = esp_buffer_read.payload_init + 1;
+
+												while (i < flash_user_ram.psw_length)
+												{
+													flash_user_ram.psw[i] = esp_buffer_read.data[j];
+
+													i++;
+													j++;
+												}
+
+												ack = 0x00;
+
+												esp_send_cmd(0xD1, &ack, 0x01);
+
+												break;
+
+											case 0xD2:	// Seteo de la ip del micro
+												flash_user_ram.ip_mcu_length = esp_buffer_read.data[esp_buffer_read.payload_init];
+
+												i = 0;
+												j = esp_buffer_read.payload_init + 1;
+
+												while (i < flash_user_ram.ip_mcu_length)
+												{
+													flash_user_ram.ip_mcu[i] = esp_buffer_read.data[j];
+
+													i++;
+													j++;
+												}
+
+												ack = 0x00;
+
+												esp_send_cmd(0xD2, &ack, 0x01);
+
+												break;
+
+											case 0xD3:	// Seteo de la ip del pc
+												flash_user_ram.ip_pc_length = esp_buffer_read.data[esp_buffer_read.payload_init];
+
+												i = 0;
+												j = esp_buffer_read.payload_init + 1;
+
+												while (i < flash_user_ram.ip_pc_length)
+												{
+													flash_user_ram.ip_pc[i] = esp_buffer_read.data[j];
+
+													i++;
+													j++;
+												}
+
+												ack = 0x00;
+
+												esp_send_cmd(0xD3, &ack, 0x01);
+
+												break;
+
+											case 0xD4:	// Seteo del puerto UDP
+												flash_user_ram.port_length = esp_buffer_read.data[esp_buffer_read.payload_init];
+
+												i = 0;
+												j = esp_buffer_read.payload_init + 1;
+
+												while (i < flash_user_ram.port_length)
+												{
+													flash_user_ram.port[i] = esp_buffer_read.data[j];
+
+													i++;
+													j++;
+												}
+
+												ack = 0x00;
+
+												esp_send_cmd(0xD4, &ack, 0x01);
+
+												break;
+
+											case 0xD5:	// Graba los parametros en ram en la flash
+												ack = 0xFF;
+
+												if (esp_buffer_read.data[esp_buffer_read.payload_init] == 0xFF)
+												{
+													if (save_flash_data() == HAL_OK)
+													{
+														ack = 0x00;
+													}
+												}
+
+												esp_send_cmd(0xD5, &ack, 0x01);
+
+												break;
+
 											case 0xF0:  // ALIVE
 												esp_send_cmd(0xF0, 0, 0x00);
 
@@ -902,14 +1014,14 @@ void esp_send_adc_data(void)
 	// Calculo la media de los datos almacenados en el buffer
 	for (uint8_t i = 0 ; i < 6 ; i++)
 	{
-		adc_buffer.mean[i] = 0;
+		adc_buffer.mean_aux = 0;
 
 		for (uint8_t j = 0 ; j < ADC_BUFFER_LENGTH ; j += ADC_MEAN_STEP)
 		{
-			adc_buffer.mean[i] += adc_buffer.data[j][i];
+			adc_buffer.mean_aux += adc_buffer.data[j][i];
 		}
 
-		adc_buffer.mean[i] = (uint16_t)(adc_buffer.mean[i] / (ADC_BUFFER_LENGTH / ADC_MEAN_STEP));
+		adc_buffer.mean[i] = (uint16_t)(adc_buffer.mean_aux / (ADC_BUFFER_LENGTH / ADC_MEAN_STEP));
 	}
 
 	uint8_t init_index;
@@ -926,7 +1038,7 @@ void esp_send_adc_data(void)
 
 	init_index = esp_buffer_cmd_write.write_index;
 
-	esp_write_buffer_send_data_write(&adc_buffer.send_esp, 1);
+	esp_write_buffer_send_data_write((uint8_t *)(&adc_buffer.send_esp), 1);
 
 	for (uint8_t i = 0 ; i < 6 ; i++)
 	{

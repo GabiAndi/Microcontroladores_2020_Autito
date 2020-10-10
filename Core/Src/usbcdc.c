@@ -3,7 +3,6 @@
 // Variables
 // Tickers
 ticker_t ticker_usbcdc_read_timeout;
-
 ticker_t ticker_usbcdc_send_adc_data;
 
 // Datos guardados
@@ -453,7 +452,7 @@ void usbcdc_send_adc_data(void)
 
 	init_index = usbcdc_buffer_write.write_index;
 
-	usbcdc_write_buffer_write(&adc_buffer.send_esp, 1);
+	usbcdc_write_buffer_write((uint8_t *)(&adc_buffer.send_esp), 1);
 
 	for (uint8_t i = 0 ; i < 6 ; i++)
 	{

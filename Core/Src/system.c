@@ -3,11 +3,13 @@
 // Variables
 // Tickers
 ticker_t ticker_system_led_status;
+ticker_t ticker_system_guardian_flash;
 
 // Datos guardados
 __attribute__ ((__section__(".user_data_flash"))) flash_data_t flash_user;	// Datos en flash
 flash_data_t flash_user_ram;	// Datos en ram
 
+// Control de la ESP
 extern esp_manager_t esp_manager;
 
 // Flag de depuracion via USB
@@ -15,6 +17,9 @@ uint8_t esp_to_usb_debug;
 
 // Variable de conversion de datos
 byte_translate_u byte_translate;
+
+// Variable de seguridad de la flash
+uint8_t flash_save_enabled;
 
 void system_init(void)
 {
@@ -103,6 +108,9 @@ void system_init(void)
 	flash_user_ram.port[3] = '0';
 	flash_user_ram.port[4] = '0';
 
+	// Seteo de la flash enabled
+	flash_save_enabled = 0;
+
 	ticker_init_core();	// Inicia la configuracion de los tickers
 
 	// Ticker para el led de estado
@@ -114,6 +122,16 @@ void system_init(void)
 	ticker_system_led_status.active = TICKER_ACTIVE;
 
 	ticker_new(&ticker_system_led_status);
+
+	// Ticker para el led de estado
+	ticker_system_guardian_flash.ms_count = 0;
+	ticker_system_guardian_flash.ms_max = 10000;
+	ticker_system_guardian_flash.calls = 0;
+	ticker_system_guardian_flash.priority = TICKER_LOW_PRIORITY;
+	ticker_system_guardian_flash.ticker_function = system_guardian_flash;
+	ticker_system_guardian_flash.active = TICKER_ACTIVE;
+
+	ticker_new(&ticker_system_guardian_flash);
 
 	// Inicializacion de los modulos
 	usbcdc_init();	// Inicia la configuracion del USB
@@ -159,40 +177,46 @@ uint8_t check_xor(uint8_t cmd, uint8_t *payload, uint8_t payload_init, uint8_t p
 
 HAL_StatusTypeDef save_flash_data(void)
 {
-	uint32_t memory_address = (uint32_t)(&flash_user);
-	uint32_t page_error = 0;
+	HAL_StatusTypeDef flash_status = HAL_ERROR;
 
-	FLASH_EraseInitTypeDef flash_erase;
-	HAL_StatusTypeDef flash_status;
-
-	HAL_FLASH_Unlock();
-	__HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_WRPERR | FLASH_FLAG_PGERR);
-
-	flash_erase.TypeErase = FLASH_TYPEERASE_PAGES;
-	flash_erase.PageAddress = memory_address;
-	flash_erase.NbPages = 1;
-
-	flash_status = HAL_FLASHEx_Erase(&flash_erase, &page_error);
-
-	flash_user_ram.checksum = check_flash_data_integrity(&flash_user_ram);	// Calculo el checksum de los datos en RAM
-
-	if (flash_status == HAL_OK)
+	if (flash_save_enabled)
 	{
-		for (uint16_t i = 0 ; i < 512 ; i++)
+		flash_save_enabled = 0;
+
+		uint32_t memory_address = (uint32_t)(&flash_user);
+		uint32_t page_error = 0;
+
+		FLASH_EraseInitTypeDef flash_erase;
+
+		HAL_FLASH_Unlock();
+		__HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_WRPERR | FLASH_FLAG_PGERR);
+
+		flash_erase.TypeErase = FLASH_TYPEERASE_PAGES;
+		flash_erase.PageAddress = memory_address;
+		flash_erase.NbPages = 1;
+
+		flash_status = HAL_FLASHEx_Erase(&flash_erase, &page_error);
+
+		flash_user_ram.checksum = check_flash_data_integrity(&flash_user_ram);	// Calculo el checksum de los datos en RAM
+
+		if (flash_status == HAL_OK)
 		{
-			flash_status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, memory_address,
-					((uint16_t *)(&flash_user_ram))[i]);
-
-			if (flash_status != HAL_OK)
+			for (uint16_t i = 0 ; i < 512 ; i++)
 			{
-				break;
+				flash_status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, memory_address,
+						((uint16_t *)(&flash_user_ram))[i]);
+
+				if (flash_status != HAL_OK)
+				{
+					break;
+				}
+
+				memory_address += 2;
 			}
-
-			memory_address += 2;
 		}
-	}
 
-	HAL_FLASH_Lock();
+		HAL_FLASH_Lock();
+	}
 
 	return flash_status;
 }
@@ -207,4 +231,9 @@ uint8_t check_flash_data_integrity(flash_data_t *flash_data)
 	}
 
 	return checksum;
+}
+
+void system_guardian_flash(void)
+{
+	flash_save_enabled = 1;
 }
