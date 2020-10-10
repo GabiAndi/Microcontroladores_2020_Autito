@@ -34,7 +34,7 @@ void system_init(void)
 	}
 
 	// Carga manual de los datos de conexion (Pruebas)
-	/*flash_user_ram.ssid_length = 10;
+	flash_user_ram.ssid_length = 10;
 
 	flash_user_ram.ssid[0] = 'T';
 	flash_user_ram.ssid[1] = 'P';
@@ -101,7 +101,7 @@ void system_init(void)
 	flash_user_ram.port[1] = '0';
 	flash_user_ram.port[2] = '0';
 	flash_user_ram.port[3] = '0';
-	flash_user_ram.port[4] = '0';*/
+	flash_user_ram.port[4] = '0';
 
 	ticker_init_core();	// Inicia la configuracion de los tickers
 

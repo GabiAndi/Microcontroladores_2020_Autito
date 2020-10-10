@@ -536,20 +536,18 @@ void esp_read_pending(void)
 											case 0xC0:	// Modo de envio de datos a la pc
 												if (esp_buffer_read.data[esp_buffer_read.payload_init] == ADC_SEND_DATA_ON)
 												{
-													if (esp_buffer_read.data[esp_buffer_read.payload_init + 1] >= 50)
+													ticker_esp_send_adc_data.ms_max = esp_buffer_read.data[esp_buffer_read.payload_init + 1];
+
+													if (ticker_esp_send_adc_data.ms_max < 150)
 													{
-														if (adc_buffer.send_esp == ADC_SEND_DATA_OFF)
-														{
-															adc_buffer.send_esp = ADC_SEND_DATA_ON;
+														ticker_esp_send_adc_data.ms_max = 150;
+													}
 
-															ticker_esp_send_adc_data.ms_max = esp_buffer_read.data[esp_buffer_read.payload_init + 1];
-															ticker_esp_send_adc_data.active = TICKER_ACTIVE;
-														}
+													if (adc_buffer.send_esp == ADC_SEND_DATA_OFF)
+													{
+														adc_buffer.send_esp = ADC_SEND_DATA_ON;
 
-														else if (adc_buffer.send_esp == ADC_SEND_DATA_ON)
-														{
-															ticker_esp_send_adc_data.ms_max = esp_buffer_read.data[esp_buffer_read.payload_init + 1];
-														}
+														ticker_esp_send_adc_data.active = TICKER_ACTIVE;
 													}
 												}
 
