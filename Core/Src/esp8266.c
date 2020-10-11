@@ -6,7 +6,8 @@ ticker_t ticker_esp_timeout_read;
 ticker_t ticker_esp_timeout_send;
 ticker_t ticker_esp_connect_to_ap;
 ticker_t ticker_esp_hard_reset;
-ticker_t ticker_esp_send_adc_data;
+ticker_t ticker_esp_send_adc_sensor_data;
+ticker_t ticker_esp_send_adc_batery_data;
 
 // Datos guardados
 extern flash_data_t flash_user_ram;
@@ -114,14 +115,23 @@ void esp_init(void)
 	ticker_new(&ticker_esp_hard_reset);
 
 	// Inicializacion del ticker para envio de datos del adc
-	ticker_esp_send_adc_data.ms_count = 0;
-	ticker_esp_send_adc_data.ms_max = 500;
-	ticker_esp_send_adc_data.calls = 0;
-	ticker_esp_send_adc_data.priority = TICKER_LOW_PRIORITY;
-	ticker_esp_send_adc_data.ticker_function = esp_send_adc_data;
-	ticker_esp_send_adc_data.active = TICKER_DEACTIVATE;
+	ticker_esp_send_adc_sensor_data.ms_count = 0;
+	ticker_esp_send_adc_sensor_data.ms_max = 500;
+	ticker_esp_send_adc_sensor_data.calls = 0;
+	ticker_esp_send_adc_sensor_data.priority = TICKER_LOW_PRIORITY;
+	ticker_esp_send_adc_sensor_data.ticker_function = esp_send_adc_sensor_data;
+	ticker_esp_send_adc_sensor_data.active = TICKER_DEACTIVATE;
 
-	ticker_new(&ticker_esp_send_adc_data);
+	ticker_new(&ticker_esp_send_adc_sensor_data);
+
+	ticker_esp_send_adc_batery_data.ms_count = 0;
+	ticker_esp_send_adc_batery_data.ms_max = 10000;
+	ticker_esp_send_adc_batery_data.calls = 0;
+	ticker_esp_send_adc_batery_data.priority = TICKER_LOW_PRIORITY;
+	ticker_esp_send_adc_batery_data.ticker_function = esp_send_adc_batery_data;
+	ticker_esp_send_adc_batery_data.active = TICKER_DEACTIVATE;
+
+	ticker_new(&ticker_esp_send_adc_batery_data);
 }
 
 void esp_write_buffer_write(uint8_t *data, uint8_t length)
@@ -542,18 +552,18 @@ void esp_read_pending(void)
 									case 0xC0:	// Modo de envio de datos a la pc
 										if (esp_buffer_read.data[esp_buffer_read.payload_init] == ADC_SEND_DATA_ON)
 										{
-											ticker_esp_send_adc_data.ms_max = esp_buffer_read.data[esp_buffer_read.payload_init + 1];
+											ticker_esp_send_adc_sensor_data.ms_max = esp_buffer_read.data[esp_buffer_read.payload_init + 1];
 
-											if (ticker_esp_send_adc_data.ms_max < 150)
+											if (ticker_esp_send_adc_sensor_data.ms_max < 150)
 											{
-												ticker_esp_send_adc_data.ms_max = 150;
+												ticker_esp_send_adc_sensor_data.ms_max = 150;
 											}
 
 											if (adc_buffer.send_esp == ADC_SEND_DATA_OFF)
 											{
 												adc_buffer.send_esp = ADC_SEND_DATA_ON;
 
-												ticker_esp_send_adc_data.active = TICKER_ACTIVE;
+												ticker_esp_send_adc_sensor_data.active = TICKER_ACTIVE;
 											}
 										}
 
@@ -561,7 +571,7 @@ void esp_read_pending(void)
 										{
 											adc_buffer.send_esp = ADC_SEND_DATA_OFF;
 
-											ticker_esp_send_adc_data.active = TICKER_DEACTIVATE;
+											ticker_esp_send_adc_sensor_data.active = TICKER_DEACTIVATE;
 										}
 
 										break;
@@ -605,6 +615,11 @@ void esp_read_pending(void)
 										}
 
 										esp_send_cmd(0xC2, (uint8_t *)(&esp_buffer_read.data[esp_buffer_read.payload_init]), 3);
+
+										break;
+
+									case 0xC3:	// Continuar nivel de bateria
+
 
 										break;
 
@@ -883,6 +898,8 @@ void esp_timeout_send(void)
 
 	esp_manager.send = ESP_SEND_NO_INIT;
 	esp_manager.error = ESP_ERROR_SEND_DATA;
+
+	esp_buffer_cmd_write.read_index = esp_buffer_cmd_write.write_index;
 }
 
 void esp_connect_to_ap(void)
@@ -1039,7 +1056,7 @@ void esp_guardian_status(void)
 	}
 }
 
-void esp_send_adc_data(void)
+void esp_send_adc_sensor_data(void)
 {
 	// Calculo la media de los datos almacenados en el buffer
 	for (uint8_t i = 0 ; i < 6 ; i++)
@@ -1079,6 +1096,31 @@ void esp_send_adc_data(void)
 	}
 
 	uint8_t checksum = check_xor(ack, (uint8_t *)(&esp_buffer_cmd_write.data), init_index, 13);
+
+	esp_write_buffer_send_data_write(&checksum, 1);
+}
+
+void esp_send_adc_batery_data(void)
+{
+	uint8_t init_index;
+
+	esp_write_buffer_send_data_write((uint8_t *)("UNER"), 4);
+
+	ack = 2;
+	esp_write_buffer_send_data_write(&ack, 1);
+
+	esp_write_buffer_send_data_write((uint8_t *)(":"), 1);
+
+	ack = 0xC3;
+	esp_write_buffer_send_data_write(&ack, 1);
+
+	init_index = esp_buffer_cmd_write.write_index;
+
+	esp_write_buffer_send_data_write((uint8_t *)(&adc_buffer.send_batery_esp), 1);
+
+	esp_write_buffer_send_data_write((uint8_t *)(&adc_buffer.batery), 1);
+
+	uint8_t checksum = check_xor(ack, (uint8_t *)(&esp_buffer_cmd_write.data), init_index, 2);
 
 	esp_write_buffer_send_data_write(&checksum, 1);
 }

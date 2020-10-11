@@ -236,6 +236,23 @@ void usbcdc_read_pending(void)
 									pwm_set_stop_motor(byte_translate.u16[0]);
 								}
 
+								ack = 0x00;
+
+								usbcdc_send_cmd(0xC2, &ack, 1);
+
+								break;
+
+							case 0xC2:
+								if (usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init] == 0xFF)
+								{
+									byte_translate.u8[0] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 1];
+									byte_translate.u8[1] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 2];
+
+									pwm_change_freq(byte_translate.u16[0]);
+								}
+
+								usbcdc_send_cmd(0xC2, (uint8_t *)(&usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init]), 3);
+
 								break;
 
 							case 0xD0:	// Seteo de ssid

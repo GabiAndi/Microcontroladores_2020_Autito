@@ -60,6 +60,9 @@ void pwm_stop_motor(void)
 	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 0);
 	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, 0);
 
+	vel_mot_der = 0;
+	vel_mot_izq = 0;
+
 	ack = 0x00;
 
 	esp_send_cmd(0xC2, &ack, 1);

@@ -122,6 +122,7 @@ void esp_hard_reset_stop(void);
 
 void esp_guardian_status(void);
 
-void esp_send_adc_data(void);
+void esp_send_adc_sensor_data(void);
+void esp_send_adc_batery_data(void);
 
 #endif /* INC_ESP8266_H_ */
