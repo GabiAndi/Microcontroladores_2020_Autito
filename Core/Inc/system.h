@@ -18,6 +18,7 @@
 #include "usbcdc.h"
 #include "esp8266.h"
 #include "adc.h"
+#include "pwm.h"
 
 #define LED_OK							1000
 #define LED_FAIL						50
@@ -60,6 +61,8 @@ typedef union
 	volatile int8_t i8[4];
 	volatile int16_t i16[2];
 	volatile int32_t i32;
+
+	volatile float f;
 }byte_translate_u;
 
 void system_init(void);

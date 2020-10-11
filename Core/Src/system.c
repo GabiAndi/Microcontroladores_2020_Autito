@@ -137,6 +137,7 @@ void system_init(void)
 	usbcdc_init();	// Inicia la configuracion del USB
 	esp_init();	// Inicia la configuracion del ESP
 	adc_init();	// Inicia la configuracion del ADC
+	pwm_init();	// Inicia la configuracion del PWM
 }
 
 void system_led_status(void)
