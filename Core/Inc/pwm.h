@@ -5,6 +5,8 @@
 
 void pwm_init(void);
 
+void pwm_change_freq(uint16_t freq);
+
 void pwm_set_stop_motor(uint16_t ms);
 
 void pwm_stop_motor(void);

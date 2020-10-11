@@ -67,8 +67,6 @@ void esp_init(void)
 	esp_manager.cmd_init = 0;
 	esp_manager.cmd_end = 0;
 
-	esp_manager.cmd_index = 0;
-
 	esp_manager.send_data_length = 0;
 
 	esp_manager.auto_connection = 0;
@@ -182,9 +180,14 @@ void esp_read_pending(void)
 
 					esp_manager.cmd_init = esp_buffer_read.read_index;
 
-					if ((esp_buffer_read.data[esp_buffer_read.read_index] == '>'))
+					if (esp_buffer_read.data[esp_buffer_read.read_index] == '>')
 					{
 						esp_manager.read_state = 3;
+					}
+
+					else if (esp_buffer_read.data[esp_buffer_read.read_index] == '+')
+					{
+						esp_manager.read_state = 4;
 					}
 
 					else
@@ -417,348 +420,353 @@ void esp_read_pending(void)
 					esp_manager.cmd = ESP_COMMAND_IDLE;
 				}
 
-				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data), esp_manager.cmd_init, esp_manager.cmd_init + 4, (uint8_t *)("+IPD,"), 5))
-				{
-					memset(esp_manager.len_char, '\0', 4);
-
-					i = esp_manager.cmd_init + 5;
-					j = 0;
-
-					while ((esp_buffer_read.data[i] != ':') && (j < 3))
-					{
-						esp_manager.len_char[j] = esp_buffer_read.data[i];
-
-						i++;
-						j++;
-					}
-
-					esp_manager.len_uint = (uint8_t)(atoi(esp_manager.len_char));
-
-					esp_manager.cmd_index = i + 1;
-					esp_buffer_read.read_state = 0;
-
-					while (esp_manager.cmd_index != (uint8_t)(i + esp_manager.len_uint - 1))
-					{
-						switch (esp_buffer_read.read_state)
-						{
-							case 0:	// Inicio de la abecera
-								if (esp_buffer_read.data[esp_manager.cmd_index] == 'U')
-								{
-									esp_buffer_read.read_state = 1;
-
-									ticker_esp_timeout_read.ms_count = 0;
-									ticker_esp_timeout_read.active = TICKER_ACTIVE;
-								}
-
-								break;
-
-							case 1:
-								if (esp_buffer_read.data[esp_manager.cmd_index] == 'N')
-								{
-									esp_buffer_read.read_state = 2;
-								}
-
-								else
-								{
-									esp_buffer_read.read_state = 0;
-								}
-
-								break;
-
-							case 2:
-								if (esp_buffer_read.data[esp_manager.cmd_index] == 'E')
-								{
-									esp_buffer_read.read_state = 3;
-								}
-
-								else
-								{
-									esp_buffer_read.read_state = 0;
-								}
-
-								break;
-
-							case 3:
-								if (esp_buffer_read.data[esp_manager.cmd_index] == 'R')
-								{
-									esp_buffer_read.read_state = 4;
-								}
-
-								else
-								{
-									esp_buffer_read.read_state = 0;
-								}
-
-								break;
-
-							case 4:	// Lee el tamaño del payload
-								esp_buffer_read.payload_length = esp_buffer_read.data[esp_manager.cmd_index];
-
-								esp_buffer_read.read_state = 5;
-
-								break;
-
-							case 5:	// Token
-								if (esp_buffer_read.data[esp_manager.cmd_index] == ':')
-								{
-									esp_buffer_read.read_state = 6;
-								}
-
-								else
-								{
-									esp_buffer_read.read_state = 0;
-								}
-
-								break;
-
-							case 6:	// Comando
-								esp_buffer_read.payload_init = esp_manager.cmd_index + 1;
-
-								esp_buffer_read.read_state = 7;
-
-								break;
-
-							case 7:	// Verificación de datos
-								// Si se terminaron de recibir todos los datos
-								if (esp_manager.cmd_index == (esp_buffer_read.payload_init + esp_buffer_read.payload_length))
-								{
-									// Se comprueba la integridad de datos
-									if (check_xor(esp_buffer_read.data[esp_buffer_read.payload_init - 1], (uint8_t *)(esp_buffer_read.data),
-											esp_buffer_read.payload_init, esp_buffer_read.payload_length)
-											== esp_buffer_read.data[esp_manager.cmd_index])
-									{
-										// Analisis del comando recibido
-										switch (esp_buffer_read.data[esp_buffer_read.payload_init - 1])
-										{
-											case 0xC0:	// Modo de envio de datos a la pc
-												if (esp_buffer_read.data[esp_buffer_read.payload_init] == ADC_SEND_DATA_ON)
-												{
-													ticker_esp_send_adc_data.ms_max = esp_buffer_read.data[esp_buffer_read.payload_init + 1];
-
-													if (ticker_esp_send_adc_data.ms_max < 150)
-													{
-														ticker_esp_send_adc_data.ms_max = 150;
-													}
-
-													if (adc_buffer.send_esp == ADC_SEND_DATA_OFF)
-													{
-														adc_buffer.send_esp = ADC_SEND_DATA_ON;
-
-														ticker_esp_send_adc_data.active = TICKER_ACTIVE;
-													}
-												}
-
-												else if (esp_buffer_read.data[esp_buffer_read.payload_init] == ADC_SEND_DATA_OFF)
-												{
-													adc_buffer.send_esp = ADC_SEND_DATA_OFF;
-
-													ticker_esp_send_adc_data.active = TICKER_DEACTIVATE;
-												}
-
-												break;
-
-											case 0xC1:
-												byte_translate.u8[0] = esp_buffer_read.data[esp_buffer_read.payload_init];
-												byte_translate.u8[1] = esp_buffer_read.data[esp_buffer_read.payload_init + 1];
-												byte_translate.u8[2] = esp_buffer_read.data[esp_buffer_read.payload_init + 2];
-												byte_translate.u8[3] = esp_buffer_read.data[esp_buffer_read.payload_init + 3];
-
-												pwm_set_motor_der_speed(byte_translate.f);
-
-												byte_translate.u8[0] = esp_buffer_read.data[esp_buffer_read.payload_init + 4];
-												byte_translate.u8[1] = esp_buffer_read.data[esp_buffer_read.payload_init + 5];
-												byte_translate.u8[2] = esp_buffer_read.data[esp_buffer_read.payload_init + 6];
-												byte_translate.u8[3] = esp_buffer_read.data[esp_buffer_read.payload_init + 7];
-
-												pwm_set_motor_izq_speed(byte_translate.f);
-
-												byte_translate.u8[0] = esp_buffer_read.data[esp_buffer_read.payload_init + 8];
-												byte_translate.u8[1] = esp_buffer_read.data[esp_buffer_read.payload_init + 9];
-
-												if (byte_translate.u16[0] != 0)
-												{
-													pwm_set_stop_motor(byte_translate.u16[0]);
-												}
-
-												break;
-
-											case 0xD0:	// Seteo de ssid
-												flash_user_ram.ssid_length = esp_buffer_read.data[esp_buffer_read.payload_init];
-
-												i = 0;
-												j = esp_buffer_read.payload_init + 1;
-
-												while (i < flash_user_ram.ssid_length)
-												{
-													flash_user_ram.ssid[i] = esp_buffer_read.data[j];
-
-													i++;
-													j++;
-												}
-
-												ack = 0x00;
-
-												esp_send_cmd(0xD0, &ack, 0x01);
-
-												break;
-
-											case 0xD1:	// Seteo de psw
-												flash_user_ram.psw_length = esp_buffer_read.data[esp_buffer_read.payload_init];
-
-												i = 0;
-												j = esp_buffer_read.payload_init + 1;
-
-												while (i < flash_user_ram.psw_length)
-												{
-													flash_user_ram.psw[i] = esp_buffer_read.data[j];
-
-													i++;
-													j++;
-												}
-
-												ack = 0x00;
-
-												esp_send_cmd(0xD1, &ack, 0x01);
-
-												break;
-
-											case 0xD2:	// Seteo de la ip del micro
-												flash_user_ram.ip_mcu_length = esp_buffer_read.data[esp_buffer_read.payload_init];
-
-												i = 0;
-												j = esp_buffer_read.payload_init + 1;
-
-												while (i < flash_user_ram.ip_mcu_length)
-												{
-													flash_user_ram.ip_mcu[i] = esp_buffer_read.data[j];
-
-													i++;
-													j++;
-												}
-
-												ack = 0x00;
-
-												esp_send_cmd(0xD2, &ack, 0x01);
-
-												break;
-
-											case 0xD3:	// Seteo de la ip del pc
-												flash_user_ram.ip_pc_length = esp_buffer_read.data[esp_buffer_read.payload_init];
-
-												i = 0;
-												j = esp_buffer_read.payload_init + 1;
-
-												while (i < flash_user_ram.ip_pc_length)
-												{
-													flash_user_ram.ip_pc[i] = esp_buffer_read.data[j];
-
-													i++;
-													j++;
-												}
-
-												ack = 0x00;
-
-												esp_send_cmd(0xD3, &ack, 0x01);
-
-												break;
-
-											case 0xD4:	// Seteo del puerto UDP
-												flash_user_ram.port_length = esp_buffer_read.data[esp_buffer_read.payload_init];
-
-												i = 0;
-												j = esp_buffer_read.payload_init + 1;
-
-												while (i < flash_user_ram.port_length)
-												{
-													flash_user_ram.port[i] = esp_buffer_read.data[j];
-
-													i++;
-													j++;
-												}
-
-												ack = 0x00;
-
-												esp_send_cmd(0xD4, &ack, 0x01);
-
-												break;
-
-											case 0xD5:	// Graba los parametros en ram en la flash
-												ack = 0xFF;
-
-												if (esp_buffer_read.data[esp_buffer_read.payload_init] == 0xFF)
-												{
-													if (save_flash_data() == HAL_OK)
-													{
-														ack = 0x00;
-													}
-												}
-
-												esp_send_cmd(0xD5, &ack, 0x01);
-
-												break;
-
-											case 0xF0:  // ALIVE
-												esp_send_cmd(0xF0, 0, 0x00);
-
-												break;
-
-											case 0xF2:	// Envio de comando AT
-												for (uint8_t i = 0 ; i < esp_buffer_read.payload_length ; i++)
-												{
-													esp_write_buffer_write((uint8_t *)(&esp_buffer_read.data[esp_buffer_read.payload_init + i]), 1);
-												}
-
-												esp_write_buffer_write((uint8_t *)("\r\n"), 2);
-
-												break;
-
-											case 0xF3:	// Envio de datos
-												for (uint8_t i = 0 ; i < esp_buffer_read.payload_length ; i++)
-												{
-													esp_write_buffer_write((uint8_t *)(&esp_buffer_read.data[esp_buffer_read.payload_init + i]), 1);
-												}
-
-												break;
-
-											default:	// Comando no valido
-												esp_send_cmd(0xFF, (uint8_t *)(&esp_buffer_read.data[esp_buffer_read.payload_init - 1]), 0x01);
-
-												break;
-										}
-									}
-
-									// Corrupcion de datos al recibir
-									else
-									{
-
-									}
-
-									// Detengo el timeout
-									ticker_esp_timeout_read.active = TICKER_DEACTIVATE;
-
-									esp_buffer_read.read_state = 0;
-									esp_manager.read_state = 0;
-								}
-
-								break;
-						}
-
-						esp_manager.cmd_index++;
-					}
-
-					esp_manager.read_state = 0;
-				}
-
 				break;
 
 			case 3:
-				if ((esp_buffer_read.data[esp_buffer_read.read_index] == ' '))
+				if (esp_buffer_read.data[esp_buffer_read.read_index] == ' ')
 				{
 					ticker_esp_timeout_read.active = TICKER_DEACTIVATE;
 
 					esp_manager.send = ESP_SEND_READY;
 
 					esp_manager.read_state = 0;
+				}
+
+				break;
+
+			case 4:
+				if (esp_buffer_read.data[esp_buffer_read.read_index] == 'I')
+				{
+					esp_manager.read_state = 5;
+				}
+
+				else
+				{
+					esp_manager.read_state = 1;
+				}
+
+				break;
+
+			case 5:
+				switch (esp_buffer_read.read_state)
+				{
+					case 0:	// Inicio de la cabecera
+						if (esp_buffer_read.data[esp_buffer_read.read_index] == 'U')
+						{
+							esp_buffer_read.read_state = 1;
+
+							ticker_esp_timeout_read.ms_count = 0;
+							ticker_esp_timeout_read.active = TICKER_ACTIVE;
+						}
+
+						break;
+
+					case 1:
+						if (esp_buffer_read.data[esp_buffer_read.read_index] == 'N')
+						{
+							esp_buffer_read.read_state = 2;
+						}
+
+						else
+						{
+							esp_buffer_read.read_state = 0;
+						}
+
+						break;
+
+					case 2:
+						if (esp_buffer_read.data[esp_buffer_read.read_index] == 'E')
+						{
+							esp_buffer_read.read_state = 3;
+						}
+
+						else
+						{
+							esp_buffer_read.read_state = 0;
+						}
+
+						break;
+
+					case 3:
+						if (esp_buffer_read.data[esp_buffer_read.read_index] == 'R')
+						{
+							esp_buffer_read.read_state = 4;
+						}
+
+						else
+						{
+							esp_buffer_read.read_state = 0;
+						}
+
+						break;
+
+					case 4:	// Lee el tamaño del payload
+						esp_buffer_read.payload_length = esp_buffer_read.data[esp_buffer_read.read_index];
+
+						esp_buffer_read.read_state = 5;
+
+						break;
+
+					case 5:	// Token
+						if (esp_buffer_read.data[esp_buffer_read.read_index] == ':')
+						{
+							esp_buffer_read.read_state = 6;
+						}
+
+						else
+						{
+							esp_buffer_read.read_state = 0;
+						}
+
+						break;
+
+					case 6:	// Comando
+						esp_buffer_read.payload_init = esp_buffer_read.read_index + 1;
+
+						esp_buffer_read.read_state = 7;
+
+						break;
+
+					case 7:	// Verificación de datos
+						// Si se terminaron de recibir todos los datos
+						if (esp_buffer_read.read_index == (esp_buffer_read.payload_init + esp_buffer_read.payload_length))
+						{
+							// Se comprueba la integridad de datos
+							if (check_xor(esp_buffer_read.data[esp_buffer_read.payload_init - 1], (uint8_t *)(esp_buffer_read.data),
+									esp_buffer_read.payload_init, esp_buffer_read.payload_length)
+									== esp_buffer_read.data[esp_buffer_read.read_index])
+							{
+								// Analisis del comando recibido
+								switch (esp_buffer_read.data[esp_buffer_read.payload_init - 1])
+								{
+									case 0xC0:	// Modo de envio de datos a la pc
+										if (esp_buffer_read.data[esp_buffer_read.payload_init] == ADC_SEND_DATA_ON)
+										{
+											ticker_esp_send_adc_data.ms_max = esp_buffer_read.data[esp_buffer_read.payload_init + 1];
+
+											if (ticker_esp_send_adc_data.ms_max < 150)
+											{
+												ticker_esp_send_adc_data.ms_max = 150;
+											}
+
+											if (adc_buffer.send_esp == ADC_SEND_DATA_OFF)
+											{
+												adc_buffer.send_esp = ADC_SEND_DATA_ON;
+
+												ticker_esp_send_adc_data.active = TICKER_ACTIVE;
+											}
+										}
+
+										else if (esp_buffer_read.data[esp_buffer_read.payload_init] == ADC_SEND_DATA_OFF)
+										{
+											adc_buffer.send_esp = ADC_SEND_DATA_OFF;
+
+											ticker_esp_send_adc_data.active = TICKER_DEACTIVATE;
+										}
+
+										break;
+
+									case 0xC1:
+										byte_translate.u8[0] = esp_buffer_read.data[esp_buffer_read.payload_init];
+										byte_translate.u8[1] = esp_buffer_read.data[esp_buffer_read.payload_init + 1];
+										byte_translate.u8[2] = esp_buffer_read.data[esp_buffer_read.payload_init + 2];
+										byte_translate.u8[3] = esp_buffer_read.data[esp_buffer_read.payload_init + 3];
+
+										pwm_set_motor_der_speed(byte_translate.f);
+
+										byte_translate.u8[0] = esp_buffer_read.data[esp_buffer_read.payload_init + 4];
+										byte_translate.u8[1] = esp_buffer_read.data[esp_buffer_read.payload_init + 5];
+										byte_translate.u8[2] = esp_buffer_read.data[esp_buffer_read.payload_init + 6];
+										byte_translate.u8[3] = esp_buffer_read.data[esp_buffer_read.payload_init + 7];
+
+										pwm_set_motor_izq_speed(byte_translate.f);
+
+										byte_translate.u8[0] = esp_buffer_read.data[esp_buffer_read.payload_init + 8];
+										byte_translate.u8[1] = esp_buffer_read.data[esp_buffer_read.payload_init + 9];
+
+										if (byte_translate.u16[0] != 0)
+										{
+											pwm_set_stop_motor(byte_translate.u16[0]);
+										}
+
+										ack = 0x00;
+
+										esp_send_cmd(0xC2, &ack, 1);
+
+										break;
+
+									case 0xC2:
+										if (esp_buffer_read.data[esp_buffer_read.payload_init] == 0xFF)
+										{
+											byte_translate.u8[0] = esp_buffer_read.data[esp_buffer_read.payload_init + 1];
+											byte_translate.u8[1] = esp_buffer_read.data[esp_buffer_read.payload_init + 2];
+
+											pwm_change_freq(byte_translate.u16[0]);
+										}
+
+										esp_send_cmd(0xC2, (uint8_t *)(&esp_buffer_read.data[esp_buffer_read.payload_init]), 3);
+
+										break;
+
+									case 0xD0:	// Seteo de ssid
+										flash_user_ram.ssid_length = esp_buffer_read.data[esp_buffer_read.payload_init];
+
+										i = 0;
+										j = esp_buffer_read.payload_init + 1;
+
+										while (i < flash_user_ram.ssid_length)
+										{
+											flash_user_ram.ssid[i] = esp_buffer_read.data[j];
+
+											i++;
+											j++;
+										}
+
+										ack = 0x00;
+
+										esp_send_cmd(0xD0, &ack, 0x01);
+
+										break;
+
+									case 0xD1:	// Seteo de psw
+										flash_user_ram.psw_length = esp_buffer_read.data[esp_buffer_read.payload_init];
+
+										i = 0;
+										j = esp_buffer_read.payload_init + 1;
+
+										while (i < flash_user_ram.psw_length)
+										{
+											flash_user_ram.psw[i] = esp_buffer_read.data[j];
+
+											i++;
+											j++;
+										}
+
+										ack = 0x00;
+
+										esp_send_cmd(0xD1, &ack, 0x01);
+
+										break;
+
+									case 0xD2:	// Seteo de la ip del micro
+										flash_user_ram.ip_mcu_length = esp_buffer_read.data[esp_buffer_read.payload_init];
+
+										i = 0;
+										j = esp_buffer_read.payload_init + 1;
+
+										while (i < flash_user_ram.ip_mcu_length)
+										{
+											flash_user_ram.ip_mcu[i] = esp_buffer_read.data[j];
+
+											i++;
+											j++;
+										}
+
+										ack = 0x00;
+
+										esp_send_cmd(0xD2, &ack, 0x01);
+
+										break;
+
+									case 0xD3:	// Seteo de la ip del pc
+										flash_user_ram.ip_pc_length = esp_buffer_read.data[esp_buffer_read.payload_init];
+
+										i = 0;
+										j = esp_buffer_read.payload_init + 1;
+
+										while (i < flash_user_ram.ip_pc_length)
+										{
+											flash_user_ram.ip_pc[i] = esp_buffer_read.data[j];
+
+											i++;
+											j++;
+										}
+
+										ack = 0x00;
+
+										esp_send_cmd(0xD3, &ack, 0x01);
+
+										break;
+
+									case 0xD4:	// Seteo del puerto UDP
+										flash_user_ram.port_length = esp_buffer_read.data[esp_buffer_read.payload_init];
+
+										i = 0;
+										j = esp_buffer_read.payload_init + 1;
+
+										while (i < flash_user_ram.port_length)
+										{
+											flash_user_ram.port[i] = esp_buffer_read.data[j];
+
+											i++;
+											j++;
+										}
+
+										ack = 0x00;
+
+										esp_send_cmd(0xD4, &ack, 0x01);
+
+										break;
+
+									case 0xD5:	// Graba los parametros en ram en la flash
+										ack = 0xFF;
+
+										if (esp_buffer_read.data[esp_buffer_read.payload_init] == 0xFF)
+										{
+											if (save_flash_data() == HAL_OK)
+											{
+												ack = 0x00;
+											}
+										}
+
+										esp_send_cmd(0xD5, &ack, 0x01);
+
+										break;
+
+									case 0xF0:  // ALIVE
+										esp_send_cmd(0xF0, 0, 0x00);
+
+										break;
+
+									case 0xF2:	// Envio de comando AT
+										for (uint8_t i = 0 ; i < esp_buffer_read.payload_length ; i++)
+										{
+											esp_write_buffer_write((uint8_t *)(&esp_buffer_read.data[esp_buffer_read.payload_init + i]), 1);
+										}
+
+										esp_write_buffer_write((uint8_t *)("\r\n"), 2);
+
+										break;
+
+									case 0xF3:	// Envio de datos
+										for (uint8_t i = 0 ; i < esp_buffer_read.payload_length ; i++)
+										{
+											esp_write_buffer_write((uint8_t *)(&esp_buffer_read.data[esp_buffer_read.payload_init + i]), 1);
+										}
+
+										break;
+
+									default:	// Comando no valido
+										esp_send_cmd(0xFF, (uint8_t *)(&esp_buffer_read.data[esp_buffer_read.payload_init - 1]), 0x01);
+
+										break;
+								}
+							}
+
+							// Corrupcion de datos al recibir
+							else
+							{
+
+							}
+
+							// Detengo el timeout
+							ticker_esp_timeout_read.active = TICKER_DEACTIVATE;
+
+							esp_buffer_read.read_state = 0;
+							esp_manager.read_state = 0;
+						}
+
+						break;
 				}
 
 				break;
@@ -867,7 +875,6 @@ void esp_timeout_read(void)
 
 	esp_manager.read_state = 0;
 	esp_buffer_read.read_state = 0;
-	esp_manager.cmd_index = 0;
 }
 
 void esp_timeout_send(void)
@@ -1001,8 +1008,6 @@ void esp_hard_reset(void)
 
 	esp_manager.cmd_init = 0;
 	esp_manager.cmd_end = 0;
-
-	esp_manager.cmd_index = 0;
 
 	esp_manager.send_data_length = 0;
 

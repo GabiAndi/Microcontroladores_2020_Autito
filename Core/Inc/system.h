@@ -1,8 +1,6 @@
 #ifndef INC_SYSTEM_H_
 #define INC_SYSTEM_H_
 
-#include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 

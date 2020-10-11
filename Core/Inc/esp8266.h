@@ -85,8 +85,6 @@ typedef struct
 	uint8_t cmd_init;
 	uint8_t cmd_end;
 
-	uint8_t cmd_index;
-
 	// Envio de datos por UDP
 	uint8_t send_data_length;
 

@@ -213,6 +213,31 @@ void usbcdc_read_pending(void)
 
 								break;
 
+							case 0xC1:
+								byte_translate.u8[0] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init];
+								byte_translate.u8[1] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 1];
+								byte_translate.u8[2] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 2];
+								byte_translate.u8[3] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 3];
+
+								pwm_set_motor_der_speed(byte_translate.f);
+
+								byte_translate.u8[0] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 4];
+								byte_translate.u8[1] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 5];
+								byte_translate.u8[2] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 6];
+								byte_translate.u8[3] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 7];
+
+								pwm_set_motor_izq_speed(byte_translate.f);
+
+								byte_translate.u8[0] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 8];
+								byte_translate.u8[1] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 9];
+
+								if (byte_translate.u16[0] != 0)
+								{
+									pwm_set_stop_motor(byte_translate.u16[0]);
+								}
+
+								break;
+
 							case 0xD0:	// Seteo de ssid
 								flash_user_ram.ssid_length = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init];
 
