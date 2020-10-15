@@ -1,12 +1,6 @@
 #ifndef INC_ADC_H_
 #define INC_ADC_H_
 
-/* Parametros para configurar el ADC:
- *
- * (ADC_CONV_TIME_ARS + ADC_CONV_TIME_SAH) / ADC_CLOCK * ADC_NCHANNELS = ADC_CONV_TIME_MS
- *
- */
-
 // Includes
 #include "system.h"
 

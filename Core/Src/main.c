@@ -110,19 +110,18 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  ticker_execute_pending();
+	  ticker_execute_pending();	// Ejecuta los tickers pendientes
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
 	  // Para el USB
-	  usbcdc_read_pending();
-	  usbcdc_write_pending();
+	  usbcdc_read_pending();	// Comprueba si llegaron datos por USB
+	  usbcdc_write_pending();	// Comprueba si hay que enviar datos por USB
 
-	  esp_read_pending();
-	  esp_write_pending();
-	  esp_write_send_data_pending();
+	  esp_read_pending();	// Comprueba si llegaron datos via ESP
+	  esp_write_pending();	// Comprueba si hay que enviar datos via ESP
 
-	  esp_guardian_status();
+	  esp_guardian_status();	// Comprueba si ocurrio algun evento inesperado en la ESP
   }
   /* USER CODE END 3 */
 }

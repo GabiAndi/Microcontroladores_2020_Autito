@@ -9,12 +9,13 @@
 #define TICKER_LOW_PRIORITY								0	// Prioridad baja (se ejecuta en blucle principal)
 #define TICKER_HIGH_PRIORITY							1	// Prioridad alta (se ejecuta en interrupcion)
 
-#define TICKER_DEACTIVATE								0
-#define TICKER_ACTIVE									1
+#define TICKER_NO_ACTIVE								0	// El ticker no esta activo
+#define TICKER_ACTIVE									1	// El ticker esta activo
 
-// Tipos de variables
-typedef void(*ticker_ptrfun)(void);	// Puntero a funcion a ejecutar en el ticker
+// Puntero a funcion a ejecutar en el ticker
+typedef void(*ticker_ptrfun)(void);
 
+// Estructura ticker
 typedef struct
 {
 	volatile uint32_t ms_max;
@@ -22,7 +23,7 @@ typedef struct
 
 	volatile uint16_t calls;
 
-	volatile uint8_t active;
+	uint8_t active;
 
 	uint8_t priority;
 

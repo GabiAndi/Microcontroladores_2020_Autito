@@ -31,7 +31,7 @@ void pwm_init(void)
 	ticker_pwm_stop_motor.calls = 0;
 	ticker_pwm_stop_motor.priority = TICKER_LOW_PRIORITY;
 	ticker_pwm_stop_motor.ticker_function = pwm_stop_motor;
-	ticker_pwm_stop_motor.active = TICKER_DEACTIVATE;
+	ticker_pwm_stop_motor.active = TICKER_NO_ACTIVE;
 
 	ticker_new(&ticker_pwm_stop_motor);
 }
@@ -53,7 +53,7 @@ void pwm_set_stop_motor(uint16_t ms)
 
 void pwm_stop_motor(void)
 {
-	ticker_pwm_stop_motor.active = TICKER_DEACTIVATE;
+	ticker_pwm_stop_motor.active = TICKER_NO_ACTIVE;
 
 	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);
 	__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
