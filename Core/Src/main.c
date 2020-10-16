@@ -42,7 +42,6 @@
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
-ADC_HandleTypeDef hadc2;
 DMA_HandleTypeDef hdma_adc1;
 
 TIM_HandleTypeDef htim4;
@@ -59,7 +58,6 @@ static void MX_DMA_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_TIM4_Init(void);
-static void MX_ADC2_Init(void);
 /* USER CODE BEGIN PFP */
 /* USER CODE END PFP */
 
@@ -101,7 +99,6 @@ int main(void)
   MX_USART3_UART_Init();
   MX_ADC1_Init();
   MX_TIM4_Init();
-  MX_ADC2_Init();
   /* USER CODE BEGIN 2 */
   system_init();	// Inicia la configuración del sistema
   /* USER CODE END 2 */
@@ -114,14 +111,25 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  // Para el USB
+	  /***********************************************************************************/
+	  /********************************** Comunicación ***********************************/
+	  /***********************************************************************************/
+
+	  /*************************************** USB ***************************************/
 	  usbcdc_read_pending();	// Comprueba si llegaron datos por USB
 	  usbcdc_write_pending();	// Comprueba si hay que enviar datos por USB
+	  /***********************************************************************************/
 
+	  /*************************************** UDP ***************************************/
 	  esp_read_pending();	// Comprueba si llegaron datos via ESP
 	  esp_write_pending();	// Comprueba si hay que enviar datos via ESP
 
 	  esp_guardian_status();	// Comprueba si ocurrio algun evento inesperado en la ESP
+	  /***********************************************************************************/
+
+	  /***********************************************************************************/
+	  /***********************************************************************************/
+	  /***********************************************************************************/
   }
   /* USER CODE END 3 */
 }
@@ -254,51 +262,6 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 2 */
 
   /* USER CODE END ADC1_Init 2 */
-
-}
-
-/**
-  * @brief ADC2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_ADC2_Init(void)
-{
-
-  /* USER CODE BEGIN ADC2_Init 0 */
-
-  /* USER CODE END ADC2_Init 0 */
-
-  ADC_ChannelConfTypeDef sConfig = {0};
-
-  /* USER CODE BEGIN ADC2_Init 1 */
-
-  /* USER CODE END ADC2_Init 1 */
-  /** Common config
-  */
-  hadc2.Instance = ADC2;
-  hadc2.Init.ScanConvMode = ADC_SCAN_DISABLE;
-  hadc2.Init.ContinuousConvMode = DISABLE;
-  hadc2.Init.DiscontinuousConvMode = DISABLE;
-  hadc2.Init.ExternalTrigConv = ADC_SOFTWARE_START;
-  hadc2.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc2.Init.NbrOfConversion = 1;
-  if (HAL_ADC_Init(&hadc2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /** Configure Regular Channel
-  */
-  sConfig.Channel = ADC_CHANNEL_6;
-  sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
-  if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN ADC2_Init 2 */
-
-  /* USER CODE END ADC2_Init 2 */
 
 }
 

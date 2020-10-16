@@ -1,34 +1,51 @@
 #include "esp8266.h"
 
-// Variables
-// Tickers
-ticker_t ticker_esp_led_status;
-ticker_t ticker_esp_write_send_data_pending;
-ticker_t ticker_esp_connect_to_ap;
-ticker_t ticker_esp_hard_reset_stop;
-ticker_t ticker_esp_send_adc_sensor_data;
-/*ticker_t ticker_esp_send_adc_batery_data;*/
+/**********************************************************************************/
+/********************************** Variables *************************************/
+/**********************************************************************************/
 
-// Datos guardados
-extern flash_data_t flash_user_ram;
+/******************************** Datos en ram ************************************/
+extern system_flash_data_t system_ram_user;
+/**********************************************************************************/
 
-// UART de la HAL
+/*********************************** Tickers **************************************/
+ticker_t esp_ticker_write_send_data_pending;
+ticker_t esp_ticker_connect_to_ap;
+ticker_t esp_ticker_hard_reset_stop;
+ticker_t esp_ticker_send_adc_sensor_data;
+/**********************************************************************************/
+
+/******************************* UART de la HAL ***********************************/
 extern UART_HandleTypeDef huart3;
+/**********************************************************************************/
 
-// Bufferes de datos
+/***************************** Bufferes de datos **********************************/
 system_ring_buffer_t esp_buffer_read;
 system_ring_buffer_t esp_buffer_write;
 system_ring_buffer_t esp_buffer_cmd_write;
 
-// Manejador de comandos
+extern system_ring_buffer_t usbcdc_buffer_read;
+/**********************************************************************************/
+
+/*************************** Manejador de comandos ********************************/
 system_cmd_manager_t esp_cmd_manager;
+/**********************************************************************************/
 
-// Control de la ESP
+/***************************** Control de la ESP **********************************/
 esp_manager_t esp_manager;
+/**********************************************************************************/
 
-// Flag de depuracion via USB
-extern uint8_t system_esp_to_usb_debug;
+/***************************** Depuracion via USB *********************************/
+extern uint8_t system_usb_debug;
+/**********************************************************************************/
 
+/**********************************************************************************/
+/**********************************************************************************/
+/**********************************************************************************/
+
+/**********************************************************************************/
+/********************************** Funciones *************************************/
+/**********************************************************************************/
 void esp_init(void)
 {
 	/***********************************************************************************/
@@ -36,19 +53,16 @@ void esp_init(void)
 	/***********************************************************************************/
 
 	/************************* Buffer de lectura de la ESP8266 *************************/
-	memset((void *)(esp_buffer_read.data), 0, 256);
 	esp_buffer_read.read_index = 0;
 	esp_buffer_read.write_index = 0;
 	/***********************************************************************************/
 
 	/************************ Buffer de escritura de la ESP8266 ************************/
-	memset((void *)(esp_buffer_write.data), 0, 256);
 	esp_buffer_write.read_index = 0;
 	esp_buffer_write.write_index = 0;
 	/***********************************************************************************/
 
 	/*********************** Buffer de escritura de comandos UDP ***********************/
-	memset((void *)(esp_buffer_cmd_write.data), 0, 256);
 	esp_buffer_cmd_write.read_index = 0;
 	esp_buffer_cmd_write.write_index = 0;
 	/***********************************************************************************/
@@ -129,58 +143,50 @@ void esp_init(void)
 
 	ticker_new(&ticker_esp_led_status);*/
 
-	/*********************** Ticker para el envio de datos UDP  ************************/
-	ticker_esp_write_send_data_pending.ms_count = 0;
-	ticker_esp_write_send_data_pending.ms_max = 100;
-	ticker_esp_write_send_data_pending.calls = 0;
-	ticker_esp_write_send_data_pending.priority = TICKER_LOW_PRIORITY;
-	ticker_esp_write_send_data_pending.ticker_function = esp_write_send_data_pending;
-	ticker_esp_write_send_data_pending.active = TICKER_ACTIVE;
+	/*********************** Ticker para el envio de datos UDP *************************/
+	esp_ticker_write_send_data_pending.ms_count = 0;
+	esp_ticker_write_send_data_pending.ms_max = 100;
+	esp_ticker_write_send_data_pending.calls = 0;
+	esp_ticker_write_send_data_pending.priority = TICKER_LOW_PRIORITY;
+	esp_ticker_write_send_data_pending.ticker_function = esp_write_send_data_pending;
+	esp_ticker_write_send_data_pending.active = TICKER_ACTIVE;
 
-	ticker_new(&ticker_esp_write_send_data_pending);
+	ticker_new(&esp_ticker_write_send_data_pending);
 	/***********************************************************************************/
 
 	/**************************** Ticker de autoconectado  *****************************/
-	ticker_esp_connect_to_ap.ms_count = 0;
-	ticker_esp_connect_to_ap.ms_max = 100;
-	ticker_esp_connect_to_ap.calls = 0;
-	ticker_esp_connect_to_ap.priority = TICKER_LOW_PRIORITY;
-	ticker_esp_connect_to_ap.ticker_function = esp_connect_to_ap;
-	ticker_esp_connect_to_ap.active = TICKER_NO_ACTIVE;
+	esp_ticker_connect_to_ap.ms_count = 0;
+	esp_ticker_connect_to_ap.ms_max = 100;
+	esp_ticker_connect_to_ap.calls = 0;
+	esp_ticker_connect_to_ap.priority = TICKER_LOW_PRIORITY;
+	esp_ticker_connect_to_ap.ticker_function = esp_connect_to_ap;
+	esp_ticker_connect_to_ap.active = TICKER_NO_ACTIVE;
 
-	ticker_new(&ticker_esp_connect_to_ap);
+	ticker_new(&esp_ticker_connect_to_ap);
 	/***********************************************************************************/
 
-	/****************************** Ticker de hard reset  ******************************/
-	ticker_esp_hard_reset_stop.ms_count = 0;
-	ticker_esp_hard_reset_stop.ms_max = 200;
-	ticker_esp_hard_reset_stop.calls = 0;
-	ticker_esp_hard_reset_stop.priority = TICKER_LOW_PRIORITY;
-	ticker_esp_hard_reset_stop.ticker_function = esp_hard_reset_stop;
-	ticker_esp_hard_reset_stop.active = TICKER_NO_ACTIVE;
+	/****************************** Ticker de hard reset *******************************/
+	esp_ticker_hard_reset_stop.ms_count = 0;
+	esp_ticker_hard_reset_stop.ms_max = 200;
+	esp_ticker_hard_reset_stop.calls = 0;
+	esp_ticker_hard_reset_stop.priority = TICKER_LOW_PRIORITY;
+	esp_ticker_hard_reset_stop.ticker_function = esp_hard_reset_stop;
+	esp_ticker_hard_reset_stop.active = TICKER_NO_ACTIVE;
 
-	ticker_new(&ticker_esp_hard_reset_stop);
+	ticker_new(&esp_ticker_hard_reset_stop);
 	/***********************************************************************************/
 
-	/************************** Ticker envio de datos del adc  *************************/
-	ticker_esp_send_adc_sensor_data.ms_count = 0;
-	ticker_esp_send_adc_sensor_data.ms_max = 255;
-	ticker_esp_send_adc_sensor_data.calls = 0;
-	ticker_esp_send_adc_sensor_data.priority = TICKER_LOW_PRIORITY;
-	ticker_esp_send_adc_sensor_data.ticker_function = esp_send_adc_sensor_data;
-	ticker_esp_send_adc_sensor_data.active = TICKER_NO_ACTIVE;
+	/************************** Ticker envio de datos del adc **************************/
+	esp_ticker_send_adc_sensor_data.ms_count = 0;
+	esp_ticker_send_adc_sensor_data.ms_max = 255;
+	esp_ticker_send_adc_sensor_data.calls = 0;
+	esp_ticker_send_adc_sensor_data.priority = TICKER_LOW_PRIORITY;
+	esp_ticker_send_adc_sensor_data.ticker_function = esp_send_adc_sensor_data;
+	esp_ticker_send_adc_sensor_data.active = TICKER_NO_ACTIVE;
 
-	ticker_new(&ticker_esp_send_adc_sensor_data);
+	ticker_new(&esp_ticker_send_adc_sensor_data);
 	/***********************************************************************************/
 
-	/*ticker_esp_send_adc_batery_data.ms_count = 0;
-	ticker_esp_send_adc_batery_data.ms_max = 10000;
-	ticker_esp_send_adc_batery_data.calls = 0;
-	ticker_esp_send_adc_batery_data.priority = TICKER_LOW_PRIORITY;
-	ticker_esp_send_adc_batery_data.ticker_function = esp_send_adc_batery_data;
-	ticker_esp_send_adc_batery_data.active = TICKER_DEACTIVATE;
-
-	ticker_new(&ticker_esp_send_adc_batery_data);*/
 	/***********************************************************************************/
 	/***********************************************************************************/
 	/***********************************************************************************/
@@ -671,22 +677,24 @@ void esp_read_pending(void)
 
 void esp_write_pending(void)
 {
+	// Si hay datos en el buffer para enviar enviamos
 	if (esp_buffer_write.read_index != esp_buffer_write.write_index)
 	{
-		if (HAL_UART_Transmit_IT(&huart3, (uint8_t *)(&esp_buffer_write.data[esp_buffer_write.read_index]), 1) == HAL_OK)
-		{
-			esp_buffer_write.read_index++;
-		}
+		HAL_UART_Transmit_IT(&huart3, (uint8_t *)(&esp_buffer_write.data[esp_buffer_write.read_index++]), 1);
 	}
 }
 
 void esp_write_send_data_pending(void)
 {
+	// Estados de envio
 	switch (esp_manager.send)
 	{
+		// Se puede enviar
 		case ESP_SEND_NO_INIT:
-			if ((esp_buffer_cmd_write.read_index != esp_buffer_cmd_write.write_index) && (esp_manager.status == ESP_STATUS_INIT)
-					&& (esp_manager.udp == ESP_UDP_INIT) && (esp_manager.connected == ESP_CONNECTED_SET_IP)
+			if ((esp_buffer_cmd_write.read_index != esp_buffer_cmd_write.write_index)
+					&& (esp_manager.status == ESP_STATUS_INIT)
+					&& (esp_manager.udp == ESP_UDP_INIT)
+					&& (esp_manager.connected == ESP_CONNECTED_SET_IP)
 					&& (esp_manager.error == ESP_ERROR_OK))
 			{
 				if (esp_buffer_cmd_write.read_index < esp_buffer_cmd_write.write_index)
@@ -815,9 +823,9 @@ void esp_connect_to_ap(void)
 
 			case 4:
 				system_buffer_write(&esp_buffer_write, (uint8_t *)("AT+CWJAP_CUR=\""), 14);
-				system_buffer_write(&esp_buffer_write, flash_user_ram.ssid, flash_user_ram.ssid_length);
+				system_buffer_write(&esp_buffer_write, system_ram_user.ssid, system_ram_user.ssid_length);
 				system_buffer_write(&esp_buffer_write, (uint8_t *)("\",\""), 3);
-				system_buffer_write(&esp_buffer_write, flash_user_ram.psw, flash_user_ram.psw_length);
+				system_buffer_write(&esp_buffer_write, system_ram_user.psw, system_ram_user.psw_length);
 				system_buffer_write(&esp_buffer_write, (uint8_t *)("\"\r\n"), 3);
 
 				esp_manager.auto_connection = 5;
@@ -834,7 +842,7 @@ void esp_connect_to_ap(void)
 
 			case 6:
 				system_buffer_write(&esp_buffer_write, (uint8_t *)("AT+CIPSTA_CUR=\""), 15);
-				system_buffer_write(&esp_buffer_write, flash_user_ram.ip_mcu, flash_user_ram.ip_mcu_length);
+				system_buffer_write(&esp_buffer_write, system_ram_user.ip_mcu, system_ram_user.ip_mcu_length);
 				system_buffer_write(&esp_buffer_write, (uint8_t *)("\"\r\n"), 3);
 
 				esp_manager.auto_connection = 7;
@@ -851,11 +859,11 @@ void esp_connect_to_ap(void)
 
 			case 8:
 				system_buffer_write(&esp_buffer_write, (uint8_t *)("AT+CIPSTART=\"UDP\",\""), 19);
-				system_buffer_write(&esp_buffer_write, flash_user_ram.ip_pc, flash_user_ram.ip_pc_length);
+				system_buffer_write(&esp_buffer_write, system_ram_user.ip_pc, system_ram_user.ip_pc_length);
 				system_buffer_write(&esp_buffer_write, (uint8_t *)("\","), 2);
-				system_buffer_write(&esp_buffer_write, flash_user_ram.port, flash_user_ram.port_length);
+				system_buffer_write(&esp_buffer_write, system_ram_user.port, system_ram_user.port_length);
 				system_buffer_write(&esp_buffer_write, (uint8_t *)(","), 1);
-				system_buffer_write(&esp_buffer_write, flash_user_ram.port, flash_user_ram.port_length);
+				system_buffer_write(&esp_buffer_write, system_ram_user.port, system_ram_user.port_length);
 				system_buffer_write(&esp_buffer_write, (uint8_t *)("\r\n"), 2);
 
 				esp_manager.auto_connection = 9;
@@ -865,7 +873,7 @@ void esp_connect_to_ap(void)
 			case 9:
 				if (esp_manager.udp == ESP_UDP_INIT)
 				{
-					ticker_esp_connect_to_ap.active = TICKER_NO_ACTIVE;
+					esp_ticker_connect_to_ap.active = TICKER_NO_ACTIVE;
 
 					esp_manager.auto_connection = 0;
 				}
@@ -874,9 +882,9 @@ void esp_connect_to_ap(void)
 		}
 	}
 
-	if (ticker_esp_connect_to_ap.calls > 100)
+	if (esp_ticker_connect_to_ap.calls > 100)
 	{
-		ticker_esp_connect_to_ap.active = TICKER_NO_ACTIVE;
+		esp_ticker_connect_to_ap.active = TICKER_NO_ACTIVE;
 	}
 }
 
@@ -903,18 +911,20 @@ void esp_hard_reset(void)
 
 	esp_manager.auto_connection = 0;
 
-	ticker_esp_hard_reset_stop.ms_count = 0;
-	ticker_esp_hard_reset_stop.active = TICKER_ACTIVE;
+	esp_ticker_hard_reset_stop.ms_count = 0;
+	esp_ticker_hard_reset_stop.active = TICKER_ACTIVE;
 }
 
 void esp_hard_reset_stop(void)
 {
 	HAL_GPIO_WritePin(ESP_RST_GPIO_Port, ESP_RST_Pin, GPIO_PIN_SET);
 
-	ticker_esp_hard_reset_stop.active = TICKER_NO_ACTIVE;
+	esp_ticker_hard_reset_stop.active = TICKER_NO_ACTIVE;
 
-	ticker_esp_connect_to_ap.ms_count = 0;
-	ticker_esp_connect_to_ap.active = TICKER_ACTIVE;
+	esp_ticker_connect_to_ap.ms_count = 0;
+	esp_ticker_connect_to_ap.active = TICKER_ACTIVE;
+
+	HAL_Delay(2000);
 }
 
 void esp_guardian_status(void)
@@ -1001,7 +1011,13 @@ void esp_send_adc_sensor_data(void)
 
 	esp_write_buffer_send_data_write(&checksum, 1);
 }*/
+/**********************************************************************************/
+/**********************************************************************************/
+/**********************************************************************************/
 
+/**********************************************************************************/
+/********************************** Callbacks *************************************/
+/**********************************************************************************/
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
 
@@ -1013,11 +1029,14 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 	{
 		esp_buffer_read.data[esp_buffer_read.write_index++] = esp_manager.byte_receibe_usart;
 
-		if (system_esp_to_usb_debug == DEBUG_ON)
+		if (system_usb_debug == SYSTEM_USB_DEBUG_ON)
 		{
-			//usbcdc_buffer_read.data[usbcdc_buffer_read.write_index++] = esp_manager.byte_receibe_usart;
+			usbcdc_buffer_read.data[usbcdc_buffer_read.write_index++] = esp_manager.byte_receibe_usart;
 		}
 
 		HAL_UART_Receive_IT(&huart3, (uint8_t *)(&esp_manager.byte_receibe_usart), 1);
 	}
 }
+/**********************************************************************************/
+/**********************************************************************************/
+/**********************************************************************************/

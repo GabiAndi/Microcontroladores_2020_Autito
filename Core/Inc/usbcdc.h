@@ -1,41 +1,60 @@
 #ifndef INC_USBCDC_H_
 #define INC_USBCDC_H_
 
-// Includes
+/**********************************************************************************/
+/*********************************** Includes *************************************/
+/**********************************************************************************/
 #include "system.h"
+/**********************************************************************************/
+/**********************************************************************************/
+/**********************************************************************************/
 
-// Typedef
-typedef struct
-{
-	volatile uint8_t data[256];
-	volatile uint8_t read_index;
-	volatile uint8_t write_index;
+/**********************************************************************************/
+/********************************** Funciones *************************************/
+/**********************************************************************************/
 
-	volatile uint8_t read_state;
-	volatile uint8_t payload_length;
-	volatile uint8_t payload_init;
-}usbcdc_buffer_read_t;
-
-typedef struct
-{
-	volatile uint8_t data[256];
-	volatile uint8_t read_index;
-	volatile uint8_t write_index;
-}usbcdc_buffer_write_t;
-
-// Funciones
+/*
+ * Funcion de inicio y configuracion del USB
+ *
+ * Configura e inicializa los bufferes de datos del USB.
+ *
+ */
 void usbcdc_init(void);
 
-void usbcdc_write_buffer_write(uint8_t *data, uint8_t length);
-void usbcdc_write_buffer_read(uint8_t *data, uint8_t length);
-
-void usbcdc_send_cmd(uint8_t cmd, uint8_t *payload, uint8_t length);
-
+/*
+ * Funcion de envio de datos del USB
+ *
+ * Se encarga de veirificar si hay datos disponibles para enviar.
+ *
+ */
 void usbcdc_read_pending(void);
+
+/*
+ * Funcion de envio de comandos via USB
+ *
+ * Esta funcion se encarga de enviar datos por USB.
+ *
+ */
 void usbcdc_write_pending(void);
 
-void usbcdc_read_timeout(void);
+/*
+ * Funcion de timeout de escritura
+ *
+ * Esta funcion se activa si el paquete tardo mucho en leerse.
+ *
+ */
+void usbcdc_timeout_read(void);
 
+/*
+ * Funcion que envia los datos del ADC a la PC
+ *
+ * Cada un cierto periodo de tiempo seteado con un comando,
+ * se envian los datos almacenados del ADC via USB.
+ *
+ */
 void usbcdc_send_adc_data(void);
+/**********************************************************************************/
+/**********************************************************************************/
+/**********************************************************************************/
 
 #endif /* INC_USBCDC_H_ */

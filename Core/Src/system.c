@@ -1,125 +1,163 @@
 #include "system.h"
 
-// Variables
-// Tickers
-ticker_t ticker_system_guardian_flash;
+/**********************************************************************************/
+/********************************** Variables *************************************/
+/**********************************************************************************/
 
-// Datos guardados
-__attribute__ ((__section__(".user_data_flash"))) flash_data_t flash_user;	// Datos en flash
-flash_data_t flash_user_ram;	// Datos en ram
+/******************************* Datos en flash ***********************************/
+__attribute__ ((__section__(".user_data_flash"))) system_flash_data_t system_flash_user;	// Datos en flash
+system_flash_data_t system_ram_user;	// Datos en ram
 
-// Flag de depuracion via USB
-uint8_t system_esp_to_usb_debug;
+uint8_t system_flash_enabled;	// Seguridad de escritura de la flash
+/**********************************************************************************/
 
-// Variable de seguridad de la flash
-uint8_t flash_save_enabled;
+/*********************************** Tickers **************************************/
+ticker_t system_ticker_flash_enable;
+/**********************************************************************************/
 
-// Variables auxiliares
-uint8_t index_init;
+/***************************** Depuracion via USB *********************************/
+uint8_t system_usb_debug;
+/**********************************************************************************/
 
+/**************************** Variables auxiliares ********************************/
+uint8_t system_index_init;	// Sirve para guardar el indice de inicio para calcular el checksum
+/**********************************************************************************/
+
+/**********************************************************************************/
+/**********************************************************************************/
+/**********************************************************************************/
+
+/**********************************************************************************/
+/********************************** Funciones *************************************/
+/**********************************************************************************/
 void system_init(void)
 {
-	// Compruebo la integridad de los datos
-	if (flash_user.checksum == check_flash_data_integrity(&flash_user))
+	/*
+	 * Compruebo la integridad de los datos de la flash antes de cargar
+	 *
+	 * Si los datos estan bien son cargados a la flash, de otra forma
+	 * los mismos son inicializados en 0.
+	 *
+	 */
+	if (system_flash_user.checksum == system_flash_check_integrity(&system_flash_user))
 	{
-		memcpy(&flash_user_ram, &flash_user, sizeof(flash_data_t));
+		memcpy(&system_ram_user, &system_flash_user, sizeof(system_flash_data_t));
 	}
 
 	else
 	{
-		memset(&flash_user_ram, 0, sizeof(flash_data_t));
+		memset(&system_ram_user, 0, sizeof(system_flash_data_t));
 	}
 
-	// Carga manual de los datos de conexion (Pruebas)
-	flash_user_ram.ssid_length = 10;
+	/*************************** Configuracion de prueba *******************************/
+	system_ram_user.ssid_length = 10;
 
-	flash_user_ram.ssid[0] = 'T';
-	flash_user_ram.ssid[1] = 'P';
-	flash_user_ram.ssid[2] = 'L';
-	flash_user_ram.ssid[3] = 'I';
-	flash_user_ram.ssid[4] = 'N';
-	flash_user_ram.ssid[5] = 'K';
-	flash_user_ram.ssid[6] = '_';
-	flash_user_ram.ssid[7] = '2';
-	flash_user_ram.ssid[8] = '4';
-	flash_user_ram.ssid[9] = 'G';
+	system_ram_user.ssid[0] = 'T';
+	system_ram_user.ssid[1] = 'P';
+	system_ram_user.ssid[2] = 'L';
+	system_ram_user.ssid[3] = 'I';
+	system_ram_user.ssid[4] = 'N';
+	system_ram_user.ssid[5] = 'K';
+	system_ram_user.ssid[6] = '_';
+	system_ram_user.ssid[7] = '2';
+	system_ram_user.ssid[8] = '4';
+	system_ram_user.ssid[9] = 'G';
 
-	flash_user_ram.psw_length = 14;
+	system_ram_user.psw_length = 14;
 
-	flash_user_ram.psw[0] = 'B';
-	flash_user_ram.psw[1] = 'a';
-	flash_user_ram.psw[2] = 's';
-	flash_user_ram.psw[3] = 'e';
-	flash_user_ram.psw[4] = 'x';
-	flash_user_ram.psw[5] = 'B';
-	flash_user_ram.psw[6] = '1';
-	flash_user_ram.psw[7] = 'A';
-	flash_user_ram.psw[8] = 'u';
-	flash_user_ram.psw[9] = '1';
-	flash_user_ram.psw[10] = '9';
-	flash_user_ram.psw[11] = '7';
-	flash_user_ram.psw[12] = '4';
-	flash_user_ram.psw[13] = '*';
+	system_ram_user.psw[0] = 'B';
+	system_ram_user.psw[1] = 'a';
+	system_ram_user.psw[2] = 's';
+	system_ram_user.psw[3] = 'e';
+	system_ram_user.psw[4] = 'x';
+	system_ram_user.psw[5] = 'B';
+	system_ram_user.psw[6] = '1';
+	system_ram_user.psw[7] = 'A';
+	system_ram_user.psw[8] = 'u';
+	system_ram_user.psw[9] = '1';
+	system_ram_user.psw[10] = '9';
+	system_ram_user.psw[11] = '7';
+	system_ram_user.psw[12] = '4';
+	system_ram_user.psw[13] = '*';
 
-	flash_user_ram.ip_mcu_length = 13;
+	system_ram_user.ip_mcu_length = 13;
 
-	flash_user_ram.ip_mcu[0] = '1';
-	flash_user_ram.ip_mcu[1] = '9';
-	flash_user_ram.ip_mcu[2] = '2';
-	flash_user_ram.ip_mcu[3] = '.';
-	flash_user_ram.ip_mcu[4] = '1';
-	flash_user_ram.ip_mcu[5] = '6';
-	flash_user_ram.ip_mcu[6] = '8';
-	flash_user_ram.ip_mcu[7] = '.';
-	flash_user_ram.ip_mcu[8] = '0';
-	flash_user_ram.ip_mcu[9] = '.';
-	flash_user_ram.ip_mcu[10] = '1';
-	flash_user_ram.ip_mcu[11] = '0';
-	flash_user_ram.ip_mcu[12] = '0';
+	system_ram_user.ip_mcu[0] = '1';
+	system_ram_user.ip_mcu[1] = '9';
+	system_ram_user.ip_mcu[2] = '2';
+	system_ram_user.ip_mcu[3] = '.';
+	system_ram_user.ip_mcu[4] = '1';
+	system_ram_user.ip_mcu[5] = '6';
+	system_ram_user.ip_mcu[6] = '8';
+	system_ram_user.ip_mcu[7] = '.';
+	system_ram_user.ip_mcu[8] = '0';
+	system_ram_user.ip_mcu[9] = '.';
+	system_ram_user.ip_mcu[10] = '1';
+	system_ram_user.ip_mcu[11] = '0';
+	system_ram_user.ip_mcu[12] = '0';
 
-	flash_user_ram.ip_pc_length = 12;
+	system_ram_user.ip_pc_length = 12;
 
-	flash_user_ram.ip_pc[0] = '1';
-	flash_user_ram.ip_pc[1] = '9';
-	flash_user_ram.ip_pc[2] = '2';
-	flash_user_ram.ip_pc[3] = '.';
-	flash_user_ram.ip_pc[4] = '1';
-	flash_user_ram.ip_pc[5] = '6';
-	flash_user_ram.ip_pc[6] = '8';
-	flash_user_ram.ip_pc[7] = '.';
-	flash_user_ram.ip_pc[8] = '0';
-	flash_user_ram.ip_pc[9] = '.';
-	flash_user_ram.ip_pc[10] = '1';
-	flash_user_ram.ip_pc[11] = '7';
+	system_ram_user.ip_pc[0] = '1';
+	system_ram_user.ip_pc[1] = '9';
+	system_ram_user.ip_pc[2] = '2';
+	system_ram_user.ip_pc[3] = '.';
+	system_ram_user.ip_pc[4] = '1';
+	system_ram_user.ip_pc[5] = '6';
+	system_ram_user.ip_pc[6] = '8';
+	system_ram_user.ip_pc[7] = '.';
+	system_ram_user.ip_pc[8] = '0';
+	system_ram_user.ip_pc[9] = '.';
+	system_ram_user.ip_pc[10] = '1';
+	system_ram_user.ip_pc[11] = '7';
 
-	flash_user_ram.port_length = 5;
+	system_ram_user.port_length = 5;
 
-	flash_user_ram.port[0] = '5';
-	flash_user_ram.port[1] = '0';
-	flash_user_ram.port[2] = '0';
-	flash_user_ram.port[3] = '0';
-	flash_user_ram.port[4] = '0';
+	system_ram_user.port[0] = '5';
+	system_ram_user.port[1] = '0';
+	system_ram_user.port[2] = '0';
+	system_ram_user.port[3] = '0';
+	system_ram_user.port[4] = '0';
+	/***********************************************************************************/
 
-	// Seteo de la flash enabled
-	flash_save_enabled = FLASH_SAVE_DATA_ENABLED;
+	system_flash_enabled = SYSTEM_FLASH_SAVE_DATA_ENABLED;	// Se habilita la flash para poder escribir
 
 	ticker_init_core();	// Inicia la configuracion de los tickers
 
-	// Ticker para el guardado de la flash
-	ticker_system_guardian_flash.ms_count = 0;
-	ticker_system_guardian_flash.ms_max = 10000;
-	ticker_system_guardian_flash.calls = 0;
-	ticker_system_guardian_flash.priority = TICKER_LOW_PRIORITY;
-	ticker_system_guardian_flash.ticker_function = system_guardian_flash;
-	ticker_system_guardian_flash.active = TICKER_ACTIVE;
+	/***********************************************************************************/
+	/************************** Inicializacion de los tickers **************************/
+	/***********************************************************************************/
 
-	ticker_new(&ticker_system_guardian_flash);
+	/********************** Ticker para el guardado de la flash ************************/
+	system_ticker_flash_enable.ms_max = 10000;
+	system_ticker_flash_enable.ms_count = 0;
+	system_ticker_flash_enable.calls = 0;
+	system_ticker_flash_enable.active = TICKER_ACTIVE;
+	system_ticker_flash_enable.priority = TICKER_LOW_PRIORITY;
+	system_ticker_flash_enable.ticker_function = system_flash_enable;
 
-	// Inicializacion de los modulos
+	ticker_new(&system_ticker_flash_enable);
+	/***********************************************************************************/
+
+	/***********************************************************************************/
+	/***********************************************************************************/
+	/***********************************************************************************/
+
+	/***********************************************************************************/
+	/************************** Inicializacion de los modulos **************************/
+	/***********************************************************************************/
 	esp_init();	// Inicia la configuracion del ESP
 	usbcdc_init();	// Inicia la configuracion del USB
 	adc_init();	// Inicia la configuracion del ADC
 	pwm_init();	// Inicia la configuracion del PWM
+	/***********************************************************************************/
+	/***********************************************************************************/
+	/***********************************************************************************/
+}
+
+void system_led_status(void)
+{
+	HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 }
 
 void system_buffer_write(system_ring_buffer_t *buffer, uint8_t *data, uint8_t length)
@@ -133,7 +171,7 @@ void system_buffer_write(system_ring_buffer_t *buffer, uint8_t *data, uint8_t le
 
 uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 {
-	uint8_t result = 0;
+	uint8_t result = 0;	// Indica si se termino de analizar el paquete o no
 
 	switch (cmd_manager->read_state)
 	{
@@ -221,7 +259,7 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 			if (cmd_manager->buffer_read->read_index == (cmd_manager->read_payload_init + cmd_manager->read_payload_length))
 			{
 				// Se comprueba la integridad de datos
-				if (check_xor((uint8_t *)(cmd_manager->buffer_read->data),
+				if (system_check_xor((uint8_t *)(cmd_manager->buffer_read->data),
 						(uint8_t)(cmd_manager->read_payload_init - 7),
 						(uint8_t)(cmd_manager->read_payload_length + 8))
 						== cmd_manager->buffer_read->data[cmd_manager->buffer_read->read_index])
@@ -440,9 +478,14 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 
 							break;*/
 
-						// ALIVE
+						/*
+						 * ALIVE
+						 *
+						 * Comando para verificar la conexión
+						 *
+						 */
 						case 0xF0:
-							index_init = cmd_manager->buffer_write->write_index;
+							system_index_init = cmd_manager->buffer_write->write_index;
 
 							cmd_manager->buffer_write->data[cmd_manager->buffer_write->write_index++] = 'U';
 							cmd_manager->buffer_write->data[cmd_manager->buffer_write->write_index++] = 'N';
@@ -452,7 +495,7 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 							cmd_manager->buffer_write->data[cmd_manager->buffer_write->write_index++] = ':';
 							cmd_manager->buffer_write->data[cmd_manager->buffer_write->write_index++] = 0xF0;
 							cmd_manager->buffer_write->data[cmd_manager->buffer_write->write_index++] =
-									check_xor((uint8_t *)(cmd_manager->buffer_write->data), index_init, 7);
+									system_check_xor((uint8_t *)(cmd_manager->buffer_write->data), system_index_init, 7);
 
 							break;
 
@@ -503,12 +546,7 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 	return result;
 }
 
-void system_led_status(void)
-{
-	HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-}
-
-uint8_t check_xor(uint8_t *data, uint8_t init, uint8_t length)
+uint8_t system_check_xor(uint8_t *data, uint8_t init, uint8_t length)
 {
 	uint8_t val_xor = 0x00;
 
@@ -520,15 +558,16 @@ uint8_t check_xor(uint8_t *data, uint8_t init, uint8_t length)
 	return val_xor;
 }
 
-HAL_StatusTypeDef save_flash_data(void)
+HAL_StatusTypeDef system_flash_save_data(void)
 {
 	HAL_StatusTypeDef flash_status = HAL_ERROR;
 
-	if (flash_save_enabled == FLASH_SAVE_DATA_ENABLED)
+	// Verifica si la flash se encuentra bloqueada o no
+	if (system_flash_enabled == SYSTEM_FLASH_SAVE_DATA_ENABLED)
 	{
-		flash_save_enabled = FLASH_SAVE_DATA_DISABLED;
+		system_flash_enabled = SYSTEM_FLASH_SAVE_DATA_DISABLED;	// Indica que se escribio en la flash y la desactiva
 
-		uint32_t memory_address = (uint32_t)(&flash_user);
+		uint32_t memory_address = (uint32_t)(&system_flash_user);
 		uint32_t page_error = 0;
 
 		FLASH_EraseInitTypeDef flash_erase;
@@ -542,15 +581,14 @@ HAL_StatusTypeDef save_flash_data(void)
 
 		flash_status = HAL_FLASHEx_Erase(&flash_erase, &page_error);
 
-		// Calculo el checksum de los datos en RAM
-		flash_user_ram.checksum = check_flash_data_integrity(&flash_user_ram);
+		system_ram_user.checksum = system_flash_check_integrity(&system_ram_user);	// Calculo el checksum de los datos en RAM
 
 		if (flash_status == HAL_OK)
 		{
 			for (uint16_t i = 0 ; i < 512 ; i++)
 			{
 				flash_status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, memory_address,
-						((uint16_t *)(&flash_user_ram))[i]);
+						((uint16_t *)(&system_ram_user))[i]);
 
 				if (flash_status != HAL_OK)
 				{
@@ -567,7 +605,7 @@ HAL_StatusTypeDef save_flash_data(void)
 	return flash_status;
 }
 
-uint8_t check_flash_data_integrity(flash_data_t *flash_data)
+uint8_t system_flash_check_integrity(system_flash_data_t *flash_data)
 {
 	uint8_t checksum = 0;
 
@@ -579,7 +617,10 @@ uint8_t check_flash_data_integrity(flash_data_t *flash_data)
 	return checksum;
 }
 
-void system_guardian_flash(void)
+void system_flash_enable(void)
 {
-	flash_save_enabled = FLASH_SAVE_DATA_ENABLED;
+	system_flash_enabled = SYSTEM_FLASH_SAVE_DATA_ENABLED;	// Habilita la escritura de la flash
 }
+/**********************************************************************************/
+/**********************************************************************************/
+/**********************************************************************************/

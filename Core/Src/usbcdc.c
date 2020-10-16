@@ -1,450 +1,115 @@
 #include "usbcdc.h"
 
-// Variables
-// Tickers
-ticker_t ticker_usbcdc_read_timeout;
-ticker_t ticker_usbcdc_send_adc_data;
+/**********************************************************************************/
+/********************************** Variables *************************************/
+/**********************************************************************************/
 
-// Datos guardados
-extern flash_data_t flash_user_ram;
+/*********************************** Tickers **************************************/
+ticker_t usbcdc_ticker_read_timeout;
+ticker_t usbcdc_ticker_send_adc_data;
+/**********************************************************************************/
 
-// Bufferes de datos
-usbcdc_buffer_read_t usbcdc_buffer_read;
-usbcdc_buffer_write_t usbcdc_buffer_write;
+/***************************** Bufferes de datos **********************************/
+system_ring_buffer_t usbcdc_buffer_read;
+system_ring_buffer_t usbcdc_buffer_write;
 
 extern adc_buffer_t adc_buffer;
+/**********************************************************************************/
 
-// Flag de depuracion via USB
-extern uint8_t esp_to_usb_debug;
+/*************************** Manejador de comandos ********************************/
+system_cmd_manager_t usbcdc_cmd_manager;
+/**********************************************************************************/
 
-// Variable de conversion de datos
-extern byte_translate_u byte_translate;
+/***************************** Depuracion via USB *********************************/
+extern uint8_t system_usb_debug;
+/**********************************************************************************/
 
-// Variables auxiliares
-uint8_t ack;
+/**********************************************************************************/
+/**********************************************************************************/
+/**********************************************************************************/
 
-uint8_t i;
-uint8_t j;
-
+/**********************************************************************************/
+/********************************** Funciones *************************************/
+/**********************************************************************************/
 void usbcdc_init(void)
 {
-	// Inicializacion de los buffers
+	/***********************************************************************************/
+	/************************* Inicializacion de los bufferes **************************/
+	/***********************************************************************************/
+
+	/**************************** Buffer de lectura del USB ****************************/
 	usbcdc_buffer_read.read_index = 0;
 	usbcdc_buffer_read.write_index = 0;
-	usbcdc_buffer_read.read_state = 0;
+	/***********************************************************************************/
 
+	/*************************** Buffer de escritura del USB ***************************/
 	usbcdc_buffer_write.read_index = 0;
 	usbcdc_buffer_write.write_index = 0;
+	/***********************************************************************************/
 
-	// Inicializacion del ticker de read timeout
-	ticker_usbcdc_read_timeout.ms_count = 0;
-	ticker_usbcdc_read_timeout.ms_max = 100;
-	ticker_usbcdc_read_timeout.calls = 0;
-	ticker_usbcdc_read_timeout.priority = TICKER_LOW_PRIORITY;
-	ticker_usbcdc_read_timeout.ticker_function = usbcdc_read_timeout;
-	ticker_usbcdc_read_timeout.active = TICKER_DEACTIVATE;
+	/***********************************************************************************/
+	/***********************************************************************************/
+	/***********************************************************************************/
 
-	ticker_new(&ticker_usbcdc_read_timeout);
+	/***********************************************************************************/
+	/************************* Inicializacion de los comandos **************************/
+	/***********************************************************************************/
+	usbcdc_cmd_manager.buffer_read = &usbcdc_buffer_read;
 
-	// Inicializacion del ticker para envio de datos del adc
-	ticker_usbcdc_send_adc_data.ms_count = 0;
-	ticker_usbcdc_send_adc_data.ms_max = 500;
-	ticker_usbcdc_send_adc_data.calls = 0;
-	ticker_usbcdc_send_adc_data.priority = TICKER_LOW_PRIORITY;
-	ticker_usbcdc_send_adc_data.ticker_function = usbcdc_send_adc_data;
-	ticker_usbcdc_send_adc_data.active = TICKER_DEACTIVATE;
+	usbcdc_cmd_manager.read_state = 0;
+	usbcdc_cmd_manager.read_payload_init = 0;
+	usbcdc_cmd_manager.read_payload_length = 0;
 
-	ticker_new(&ticker_usbcdc_send_adc_data);
-}
+	usbcdc_cmd_manager.read_time_out.ms_max = 100;
+	usbcdc_cmd_manager.read_time_out.ms_count = 0;
+	usbcdc_cmd_manager.read_time_out.calls = 0;
+	usbcdc_cmd_manager.read_time_out.active = TICKER_NO_ACTIVE;
+	usbcdc_cmd_manager.read_time_out.priority = TICKER_LOW_PRIORITY;
+	usbcdc_cmd_manager.read_time_out.ticker_function = usbcdc_timeout_read;
 
-void usbcdc_write_buffer_write(uint8_t *data, uint8_t length)
-{
-	for (uint8_t i = 0 ; i < length ; i++)
-	{
-		usbcdc_buffer_write.data[usbcdc_buffer_write.write_index] = data[i];
-		usbcdc_buffer_write.write_index++;
-	}
-}
+	ticker_new(&usbcdc_cmd_manager.read_time_out);
 
-void usbcdc_write_buffer_read(uint8_t *data, uint8_t length)
-{
-	for (uint8_t i = 0 ; i < length ; i++)
-	{
-		usbcdc_buffer_read.data[usbcdc_buffer_read.write_index] = data[i];
-		usbcdc_buffer_read.write_index++;
-	}
-}
+	usbcdc_cmd_manager.buffer_write = &usbcdc_buffer_write;
 
-void usbcdc_send_cmd(uint8_t cmd, uint8_t *payload, uint8_t length)
-{
-	// Cabecera UNER
-	usbcdc_write_buffer_write((uint8_t *)("UNER"), 4);
-	usbcdc_write_buffer_write(&length, 1);
-	usbcdc_write_buffer_write((uint8_t *)(":"), 1);
-	usbcdc_write_buffer_write(&cmd, 1);
-	usbcdc_write_buffer_write(payload, length);
+	usbcdc_cmd_manager.byte_converter.u32 = 0;
+	/***********************************************************************************/
+	/***********************************************************************************/
+	/***********************************************************************************/
 
-	uint8_t checksum = check_xor(cmd, payload, 0, length);
+	/***********************************************************************************/
+	/************************** Inicializacion de los tickers **************************/
+	/***********************************************************************************/
 
-	usbcdc_write_buffer_write(&checksum, 1);
+	/***************************** Ticker de read timeout ******************************/
+	usbcdc_ticker_read_timeout.ms_count = 0;
+	usbcdc_ticker_read_timeout.ms_max = 100;
+	usbcdc_ticker_read_timeout.calls = 0;
+	usbcdc_ticker_read_timeout.priority = TICKER_LOW_PRIORITY;
+	usbcdc_ticker_read_timeout.ticker_function = usbcdc_timeout_read;
+	usbcdc_ticker_read_timeout.active = TICKER_NO_ACTIVE;
+
+	ticker_new(&usbcdc_ticker_read_timeout);
+	/***********************************************************************************/
+
+	/***************************** Ticker para envio de datos del adc ******************************/
+	usbcdc_ticker_send_adc_data.ms_count = 0;
+	usbcdc_ticker_send_adc_data.ms_max = 500;
+	usbcdc_ticker_send_adc_data.calls = 0;
+	usbcdc_ticker_send_adc_data.priority = TICKER_LOW_PRIORITY;
+	usbcdc_ticker_send_adc_data.ticker_function = usbcdc_send_adc_data;
+	usbcdc_ticker_send_adc_data.active = TICKER_NO_ACTIVE;
+
+	ticker_new(&usbcdc_ticker_send_adc_data);
+	/***********************************************************************************/
+
+	/***********************************************************************************/
+	/***********************************************************************************/
+	/***********************************************************************************/
 }
 
 void usbcdc_read_pending(void)
 {
-	if (usbcdc_buffer_read.read_index != usbcdc_buffer_read.write_index)
-	{
-		switch (usbcdc_buffer_read.read_state)
-		{
-			case 0:	// Inicio de la abecera
-				if (usbcdc_buffer_read.data[usbcdc_buffer_read.read_index] == 'U')
-				{
-					usbcdc_buffer_read.read_state = 1;
-
-					ticker_usbcdc_read_timeout.ms_count = 0;
-					ticker_usbcdc_read_timeout.active = TICKER_ACTIVE;
-				}
-
-				break;
-
-			case 1:
-				if (usbcdc_buffer_read.data[usbcdc_buffer_read.read_index] == 'N')
-				{
-					usbcdc_buffer_read.read_state = 2;
-				}
-
-				else
-				{
-					usbcdc_buffer_read.read_state = 0;
-				}
-
-				break;
-
-			case 2:
-				if (usbcdc_buffer_read.data[usbcdc_buffer_read.read_index] == 'E')
-				{
-					usbcdc_buffer_read.read_state = 3;
-				}
-
-				else
-				{
-					usbcdc_buffer_read.read_state = 0;
-				}
-
-				break;
-
-			case 3:
-				if (usbcdc_buffer_read.data[usbcdc_buffer_read.read_index] == 'R')
-				{
-					usbcdc_buffer_read.read_state = 4;
-				}
-
-				else
-				{
-					usbcdc_buffer_read.read_state = 0;
-				}
-
-				break;
-
-			case 4:	// Lee el tamaño del payload
-				usbcdc_buffer_read.payload_length = usbcdc_buffer_read.data[usbcdc_buffer_read.read_index];
-
-				usbcdc_buffer_read.read_state = 5;
-
-				break;
-
-			case 5:	// Token
-				if (usbcdc_buffer_read.data[usbcdc_buffer_read.read_index] == ':')
-				{
-					usbcdc_buffer_read.read_state = 6;
-				}
-
-				else
-				{
-					usbcdc_buffer_read.read_state = 0;
-				}
-
-				break;
-
-			case 6:	// Comando
-				usbcdc_buffer_read.payload_init = usbcdc_buffer_read.read_index + 1;
-
-				usbcdc_buffer_read.read_state = 7;
-
-				break;
-
-			case 7:	// Verificación de datos
-				// Si se terminaron de recibir todos los datos
-				if (usbcdc_buffer_read.read_index == (usbcdc_buffer_read.payload_init + usbcdc_buffer_read.payload_length))
-				{
-					// Se comprueba la integridad de datos
-					if (check_xor(usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init - 1], (uint8_t *)(usbcdc_buffer_read.data),
-							usbcdc_buffer_read.payload_init, usbcdc_buffer_read.payload_length)
-							== usbcdc_buffer_read.data[usbcdc_buffer_read.read_index])
-					{
-						// Analisis del comando recibido
-						switch (usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init - 1])
-						{
-							case 0xC0:	// Modo de envio de datos a la pc
-								if (usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init] == ADC_SEND_DATA_ON)
-								{
-									if (usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 1] >= 50)
-									{
-										if (adc_buffer.send_usb == ADC_SEND_DATA_OFF)
-										{
-											adc_buffer.send_usb = ADC_SEND_DATA_ON;
-
-											ticker_usbcdc_send_adc_data.ms_max = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 1];
-											ticker_usbcdc_send_adc_data.active = TICKER_ACTIVE;
-										}
-
-										else if (adc_buffer.send_usb == ADC_SEND_DATA_ON)
-										{
-											ticker_usbcdc_send_adc_data.ms_max = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 1];
-										}
-									}
-								}
-
-								else if (usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init] == ADC_SEND_DATA_OFF)
-								{
-									adc_buffer.send_usb = ADC_SEND_DATA_OFF;
-
-									ticker_usbcdc_send_adc_data.active = TICKER_DEACTIVATE;
-								}
-
-								break;
-
-							case 0xC1:
-								byte_translate.u8[0] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init];
-								byte_translate.u8[1] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 1];
-								byte_translate.u8[2] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 2];
-								byte_translate.u8[3] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 3];
-
-								pwm_set_motor_der_speed(byte_translate.f);
-
-								byte_translate.u8[0] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 4];
-								byte_translate.u8[1] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 5];
-								byte_translate.u8[2] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 6];
-								byte_translate.u8[3] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 7];
-
-								pwm_set_motor_izq_speed(byte_translate.f);
-
-								byte_translate.u8[0] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 8];
-								byte_translate.u8[1] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 9];
-
-								if (byte_translate.u16[0] != 0)
-								{
-									pwm_set_stop_motor(byte_translate.u16[0]);
-								}
-
-								ack = 0x00;
-
-								usbcdc_send_cmd(0xC2, &ack, 1);
-
-								break;
-
-							case 0xC2:
-								if (usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init] == 0xFF)
-								{
-									byte_translate.u8[0] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 1];
-									byte_translate.u8[1] = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + 2];
-
-									pwm_change_freq(byte_translate.u16[0]);
-								}
-
-								usbcdc_send_cmd(0xC2, (uint8_t *)(&usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init]), 3);
-
-								break;
-
-							case 0xD0:	// Seteo de ssid
-								flash_user_ram.ssid_length = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init];
-
-								i = 0;
-								j = usbcdc_buffer_read.payload_init + 1;
-
-								while (i < flash_user_ram.ssid_length)
-								{
-									flash_user_ram.ssid[i] = usbcdc_buffer_read.data[j];
-
-									i++;
-									j++;
-								}
-
-								ack = 0x00;
-
-								usbcdc_send_cmd(0xD0, &ack, 0x01);
-
-								break;
-
-							case 0xD1:	// Seteo de psw
-								flash_user_ram.psw_length = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init];
-
-								i = 0;
-								j = usbcdc_buffer_read.payload_init + 1;
-
-								while (i < flash_user_ram.psw_length)
-								{
-									flash_user_ram.psw[i] = usbcdc_buffer_read.data[j];
-
-									i++;
-									j++;
-								}
-
-								ack = 0x00;
-
-								usbcdc_send_cmd(0xD1, &ack, 0x01);
-
-								break;
-
-							case 0xD2:	// Seteo de la ip del micro
-								flash_user_ram.ip_mcu_length = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init];
-
-								i = 0;
-								j = usbcdc_buffer_read.payload_init + 1;
-
-								while (i < flash_user_ram.ip_mcu_length)
-								{
-									flash_user_ram.ip_mcu[i] = usbcdc_buffer_read.data[j];
-
-									i++;
-									j++;
-								}
-
-								ack = 0x00;
-
-								usbcdc_send_cmd(0xD2, &ack, 0x01);
-
-								break;
-
-							case 0xD3:	// Seteo de la ip del pc
-								flash_user_ram.ip_pc_length = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init];
-
-								i = 0;
-								j = usbcdc_buffer_read.payload_init + 1;
-
-								while (i < flash_user_ram.ip_pc_length)
-								{
-									flash_user_ram.ip_pc[i] = usbcdc_buffer_read.data[j];
-
-									i++;
-									j++;
-								}
-
-								ack = 0x00;
-
-								usbcdc_send_cmd(0xD3, &ack, 0x01);
-
-								break;
-
-							case 0xD4:	// Seteo del puerto UDP
-								flash_user_ram.port_length = usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init];
-
-								i = 0;
-								j = usbcdc_buffer_read.payload_init + 1;
-
-								while (i < flash_user_ram.port_length)
-								{
-									flash_user_ram.port[i] = usbcdc_buffer_read.data[j];
-
-									i++;
-									j++;
-								}
-
-								ack = 0x00;
-
-								usbcdc_send_cmd(0xD4, &ack, 0x01);
-
-								break;
-
-							case 0xD5:	// Graba los parametros en ram en la flash
-								ack = 0xFF;
-
-								if (usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init] == 0xFF)
-								{
-									if (save_flash_data() == HAL_OK)
-									{
-										ack = 0x00;
-									}
-								}
-
-								usbcdc_send_cmd(0xD5, &ack, 0x01);
-
-								break;
-
-							case 0xF0:  // ALIVE
-								usbcdc_send_cmd(0xF0, 0, 0x00);
-
-								break;
-
-							case 0xF1:	// Modo debug
-								if (usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init] == 0xFF)
-								{
-									esp_to_usb_debug = DEBUG_ON;
-
-									ack = 0x00;
-
-									usbcdc_send_cmd(0xF1, &ack, 0x01);
-								}
-
-								else if (usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init] == 0x00)
-								{
-									esp_to_usb_debug = DEBUG_OFF;
-
-									ack = 0x00;
-
-									usbcdc_send_cmd(0xF1, &ack, 0x01);
-								}
-
-								else
-								{
-									ack = 0xFF;
-
-									usbcdc_send_cmd(0xF1, &ack, 0x01);
-								}
-
-								break;
-
-							case 0xF2:	// Envio de comando AT
-								for (uint8_t i = 0 ; i < usbcdc_buffer_read.payload_length ; i++)
-								{
-									esp_write_buffer_write((uint8_t *)(&usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + i]), 1);
-								}
-
-								esp_write_buffer_write((uint8_t *)("\r\n"), 2);
-
-								break;
-
-							case 0xF3:	// Envio de datos
-								for (uint8_t i = 0 ; i < usbcdc_buffer_read.payload_length ; i++)
-								{
-									esp_write_buffer_write((uint8_t *)(&usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init + i]), 1);
-								}
-
-								break;
-
-							default:	// Comando no valido
-								usbcdc_send_cmd(0xFF, (uint8_t *)(&usbcdc_buffer_read.data[usbcdc_buffer_read.payload_init - 1]), 0x01);
-
-								break;
-						}
-					}
-
-					// Corrupcion de datos al recibir
-					else
-					{
-
-					}
-
-					// Detengo el timeout
-					ticker_usbcdc_read_timeout.active = TICKER_DEACTIVATE;
-
-					usbcdc_buffer_read.read_state = 0;
-				}
-
-				break;
-		}
-
-		usbcdc_buffer_read.read_index++;
-	}
+	system_data_package(&usbcdc_cmd_manager);
 }
 
 void usbcdc_write_pending(void)
@@ -458,17 +123,17 @@ void usbcdc_write_pending(void)
 	}
 }
 
-void usbcdc_read_timeout(void)
+void usbcdc_timeout_read(void)
 {
-	ticker_usbcdc_read_timeout.active = TICKER_DEACTIVATE;
+	usbcdc_ticker_read_timeout.active = TICKER_NO_ACTIVE;
 
-	usbcdc_buffer_read.read_state = 0;
+	usbcdc_cmd_manager.read_state = 0;
 }
 
 void usbcdc_send_adc_data(void)
 {
 	// Calculo la media de los datos almacenados en el buffer
-	for (uint8_t i = 0 ; i < 6 ; i++)
+	/*for (uint8_t i = 0 ; i < 6 ; i++)
 	{
 		adc_buffer.mean[i] = 0;
 
@@ -506,5 +171,8 @@ void usbcdc_send_adc_data(void)
 
 	uint8_t checksum = check_xor(ack, (uint8_t *)(&usbcdc_buffer_write.data), init_index, 13);
 
-	usbcdc_write_buffer_write(&checksum, 1);
+	usbcdc_write_buffer_write(&checksum, 1);*/
 }
+/**********************************************************************************/
+/**********************************************************************************/
+/**********************************************************************************/
