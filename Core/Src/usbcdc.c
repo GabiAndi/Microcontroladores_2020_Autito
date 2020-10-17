@@ -5,6 +5,8 @@
 /**********************************************************************************/
 
 /*********************************** Tickers **************************************/
+ticker_t usbcdc_ticker_read_time_out;
+
 ticker_t usbcdc_ticker_send_adc_data;
 /**********************************************************************************/
 
@@ -59,14 +61,7 @@ void usbcdc_init(void)
 	usbcdc_cmd_manager.read_payload_init = 0;
 	usbcdc_cmd_manager.read_payload_length = 0;
 
-	usbcdc_cmd_manager.read_time_out.ms_max = 100;
-	usbcdc_cmd_manager.read_time_out.ms_count = 0;
-	usbcdc_cmd_manager.read_time_out.calls = 0;
-	usbcdc_cmd_manager.read_time_out.active = TICKER_NO_ACTIVE;
-	usbcdc_cmd_manager.read_time_out.priority = TICKER_LOW_PRIORITY;
-	usbcdc_cmd_manager.read_time_out.ticker_function = usbcdc_timeout_read;
-
-	ticker_new(&usbcdc_cmd_manager.read_time_out);
+	usbcdc_cmd_manager.read_time_out = &usbcdc_ticker_read_time_out;
 
 	usbcdc_cmd_manager.buffer_write = &usbcdc_buffer_write;
 
@@ -79,7 +74,18 @@ void usbcdc_init(void)
 	/************************** Inicializacion de los tickers **************************/
 	/***********************************************************************************/
 
-	/***************************** Ticker para envio de datos del adc ******************************/
+	/***************************** Ticker de timeout read  *****************************/
+	usbcdc_ticker_read_time_out.ms_max = 100;
+	usbcdc_ticker_read_time_out.ms_count = 0;
+	usbcdc_ticker_read_time_out.calls = 0;
+	usbcdc_ticker_read_time_out.active = TICKER_NO_ACTIVE;
+	usbcdc_ticker_read_time_out.priority = TICKER_LOW_PRIORITY;
+	usbcdc_ticker_read_time_out.ticker_function = usbcdc_timeout_read;
+
+	ticker_new(&usbcdc_ticker_read_time_out);
+	/***********************************************************************************/
+
+	/*********************** Ticker para envio de datos del adc ************************/
 	usbcdc_ticker_send_adc_data.ms_count = 0;
 	usbcdc_ticker_send_adc_data.ms_max = 500;
 	usbcdc_ticker_send_adc_data.calls = 0;
@@ -97,7 +103,7 @@ void usbcdc_init(void)
 
 void usbcdc_read_pending(void)
 {
-	if ((usbcdc_buffer_read.read_index != usbcdc_buffer_read.write_index))
+	if (usbcdc_buffer_read.read_index != usbcdc_buffer_read.write_index)
 	{
 		system_data_package(&usbcdc_cmd_manager);
 
@@ -118,7 +124,7 @@ void usbcdc_write_pending(void)
 
 void usbcdc_timeout_read(void)
 {
-	usbcdc_cmd_manager.read_time_out.active = TICKER_NO_ACTIVE;
+	usbcdc_ticker_read_time_out.active = TICKER_NO_ACTIVE;
 
 	usbcdc_cmd_manager.read_state = 0;
 }

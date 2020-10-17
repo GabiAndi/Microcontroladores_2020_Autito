@@ -83,15 +83,15 @@ typedef struct
 /******************************* Convertir datos **********************************/
 typedef union
 {
-	volatile uint8_t u8[4];
-	volatile uint16_t u16[2];
-	volatile uint32_t u32;
+	uint8_t u8[4];
+	uint16_t u16[2];
+	uint32_t u32;
 
-	volatile int8_t i8[4];
-	volatile int16_t i16[2];
-	volatile int32_t i32;
+	int8_t i8[4];
+	int16_t i16[2];
+	int32_t i32;
 
-	volatile float f;
+	float f;
 }system_byte_converter_u;
 /**********************************************************************************/
 
@@ -113,11 +113,9 @@ typedef struct
 	uint8_t read_payload_init;
 	uint8_t read_payload_length;
 
-	ticker_t read_time_out;
+	ticker_t *read_time_out;
 
 	system_ring_buffer_t *buffer_write;
-
-	ticker_t write_time_out;
 
 	system_byte_converter_u byte_converter;
 }system_cmd_manager_t;

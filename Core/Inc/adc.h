@@ -14,11 +14,7 @@
 /**********************************************************************************/
 
 /************************** Tamaño del buffer de datos ****************************/
-#define ADC_BUFFER_LENGTH			100
-/**********************************************************************************/
-
-/************************* Pasos para calcular la media ***************************/
-#define ADC_MEAN_STEP				5
+#define ADC_BUFFER_LENGTH			60
 /**********************************************************************************/
 
 /**********************************************************************************/
@@ -32,14 +28,11 @@ typedef struct
 {
 	volatile uint16_t data[ADC_BUFFER_LENGTH][6];
 
-	volatile uint16_t mean[6];
-
-	volatile uint32_t mean_aux;
-
 	volatile uint8_t data_index;
 
-	volatile uint8_t send_esp;
-	volatile uint8_t send_usb;
+	volatile uint16_t mean[6];
+
+	system_ring_buffer_t *buffer_write;
 }adc_buffer_t;
 /**********************************************************************************/
 /**********************************************************************************/
@@ -60,6 +53,23 @@ void adc_init(void);
  *
  */
 void adc_capture(void);
+
+/*
+ * Funcion que establece el destino de los datos capturados
+ *
+ * Se establece en que buffer se enviara el comando de datos.
+ *
+ */
+void adc_set_buffer_send_data(system_ring_buffer_t *buffer, uint32_t ms);
+
+/*
+ * Funcion que envia los datos del ADC a la PC
+ *
+ * Cada un cierto periodo de tiempo seteado con un comando,
+ * se envian los datos almacenados del ADC.
+ *
+ */
+void adc_send_data(void);
 /**********************************************************************************/
 /**********************************************************************************/
 /**********************************************************************************/

@@ -9,6 +9,9 @@ extern system_flash_data_t system_ram_user;
 /**********************************************************************************/
 
 /*********************************** Tickers **************************************/
+ticker_t esp_ticker_read_time_out;
+ticker_t esp_ticker_write_time_out;
+
 ticker_t esp_ticker_connect_to_ap;
 ticker_t esp_ticker_hard_reset_stop;
 ticker_t esp_ticker_send_adc_sensor_data;
@@ -79,25 +82,9 @@ void esp_init(void)
 	esp_cmd_manager.read_payload_init = 0;
 	esp_cmd_manager.read_payload_length = 0;
 
-	esp_cmd_manager.read_time_out.ms_max = 100;
-	esp_cmd_manager.read_time_out.ms_count = 0;
-	esp_cmd_manager.read_time_out.calls = 0;
-	esp_cmd_manager.read_time_out.active = TICKER_NO_ACTIVE;
-	esp_cmd_manager.read_time_out.priority = TICKER_LOW_PRIORITY;
-	esp_cmd_manager.read_time_out.ticker_function = esp_timeout_read;
-
-	ticker_new(&esp_cmd_manager.read_time_out);
+	esp_cmd_manager.read_time_out = &esp_ticker_read_time_out;
 
 	esp_cmd_manager.buffer_write = &esp_buffer_cmd_write;
-
-	esp_cmd_manager.write_time_out.ms_max = 100;
-	esp_cmd_manager.write_time_out.ms_count = 0;
-	esp_cmd_manager.write_time_out.calls = 0;
-	esp_cmd_manager.write_time_out.active = TICKER_NO_ACTIVE;
-	esp_cmd_manager.write_time_out.priority = TICKER_LOW_PRIORITY;
-	esp_cmd_manager.write_time_out.ticker_function = esp_timeout_write;
-
-	ticker_new(&esp_cmd_manager.write_time_out);
 
 	esp_cmd_manager.byte_converter.u32 = 0;
 	/***********************************************************************************/
@@ -132,6 +119,28 @@ void esp_init(void)
 	/************************** Inicializacion de los tickers **************************/
 	/***********************************************************************************/
 
+	/***************************** Ticker de timeout read  *****************************/
+	esp_ticker_read_time_out.ms_max = 150;
+	esp_ticker_read_time_out.ms_count = 0;
+	esp_ticker_read_time_out.calls = 0;
+	esp_ticker_read_time_out.active = TICKER_NO_ACTIVE;
+	esp_ticker_read_time_out.priority = TICKER_LOW_PRIORITY;
+	esp_ticker_read_time_out.ticker_function = esp_timeout_read;
+
+	ticker_new(&esp_ticker_read_time_out);
+	/***********************************************************************************/
+
+	/***************************** Ticker de timeout write  ****************************/
+	esp_ticker_write_time_out.ms_max = 150;
+	esp_ticker_write_time_out.ms_count = 0;
+	esp_ticker_write_time_out.calls = 0;
+	esp_ticker_write_time_out.active = TICKER_NO_ACTIVE;
+	esp_ticker_write_time_out.priority = TICKER_LOW_PRIORITY;
+	esp_ticker_write_time_out.ticker_function = esp_timeout_write;
+
+	ticker_new(&esp_ticker_write_time_out);
+	/***********************************************************************************/
+
 	/**************************** Ticker de autoconectado  *****************************/
 	esp_ticker_connect_to_ap.ms_count = 0;
 	esp_ticker_connect_to_ap.ms_max = 200;
@@ -152,17 +161,6 @@ void esp_init(void)
 	esp_ticker_hard_reset_stop.active = TICKER_NO_ACTIVE;
 
 	ticker_new(&esp_ticker_hard_reset_stop);
-	/***********************************************************************************/
-
-	/************************** Ticker envio de datos del adc **************************/
-	esp_ticker_send_adc_sensor_data.ms_count = 0;
-	esp_ticker_send_adc_sensor_data.ms_max = 255;
-	esp_ticker_send_adc_sensor_data.calls = 0;
-	esp_ticker_send_adc_sensor_data.priority = TICKER_LOW_PRIORITY;
-	esp_ticker_send_adc_sensor_data.ticker_function = esp_send_adc_sensor_data;
-	esp_ticker_send_adc_sensor_data.active = TICKER_NO_ACTIVE;
-
-	ticker_new(&esp_ticker_send_adc_sensor_data);
 	/***********************************************************************************/
 
 	/***********************************************************************************/
@@ -188,8 +186,8 @@ void esp_read_pending(void)
 						(esp_buffer_read.data[esp_buffer_read.read_index] != '\n'))
 				{
 					// Se activa el timeout para la lectura del paquete
-					esp_cmd_manager.read_time_out.ms_count = 0;
-					esp_cmd_manager.read_time_out.active = TICKER_ACTIVE;
+					esp_ticker_read_time_out.ms_count = 0;
+					esp_ticker_read_time_out.active = TICKER_ACTIVE;
 
 					// Si se recibio un > es porque se va a enviar datos via UDP
 					if (esp_buffer_read.data[esp_buffer_read.read_index] == '>')
@@ -230,7 +228,7 @@ void esp_read_pending(void)
 
 			// Se analiza el comando que se recibio
 			case 2:
-				esp_cmd_manager.read_time_out.active = TICKER_NO_ACTIVE;
+				esp_ticker_read_time_out.active = TICKER_NO_ACTIVE;
 
 				esp_manager.read_state = 0;
 
@@ -545,7 +543,7 @@ void esp_read_pending(void)
 			case 3:
 				if (esp_buffer_read.data[esp_buffer_read.read_index] == ' ')
 				{
-					esp_cmd_manager.read_time_out.active = TICKER_NO_ACTIVE;
+					esp_ticker_read_time_out.active = TICKER_NO_ACTIVE;
 					esp_manager.read_state = 0;
 
 					esp_manager.send = ESP_SEND_READY;
@@ -582,7 +580,7 @@ void esp_read_pending(void)
 
 			// Se analiza el estado que se recibio
 			case 6:
-				esp_cmd_manager.read_time_out.active = TICKER_NO_ACTIVE;
+				esp_ticker_read_time_out.active = TICKER_NO_ACTIVE;
 				esp_manager.read_state = 0;
 
 				/*****************************************************************************************/
@@ -690,7 +688,7 @@ void esp_write_send_data_pending(void)
 
 				else
 				{
-					esp_manager.send_data_length = (uint8_t)(256 - (esp_buffer_cmd_write.read_index + esp_buffer_cmd_write.write_index));
+					esp_manager.send_data_length = (uint8_t)(256 - esp_buffer_cmd_write.read_index + esp_buffer_cmd_write.write_index);
 				}
 
 				memset(esp_manager.len_char, '\0', 4);
@@ -701,8 +699,8 @@ void esp_write_send_data_pending(void)
 				system_buffer_write(&esp_buffer_write, (uint8_t *)(esp_manager.len_char), esp_manager.len_uint);
 				system_buffer_write(&esp_buffer_write, (uint8_t *)("\r\n"), 2);
 
-				esp_cmd_manager.write_time_out.ms_count = 0;
-				esp_cmd_manager.write_time_out.active = TICKER_ACTIVE;
+				esp_ticker_write_time_out.ms_count = 0;
+				esp_ticker_write_time_out.active = TICKER_ACTIVE;
 
 				esp_manager.send = ESP_SEND_WAITING_OK;
 			}
@@ -725,7 +723,7 @@ void esp_write_send_data_pending(void)
 			break;
 
 		case ESP_SEND_OK:
-			esp_cmd_manager.write_time_out.active = TICKER_NO_ACTIVE;
+			esp_ticker_write_time_out.active = TICKER_NO_ACTIVE;
 
 			esp_manager.send = ESP_SEND_NO_INIT;
 
@@ -759,7 +757,7 @@ uint8_t esp_at_cmp(uint8_t *at, uint8_t at_init, uint8_t at_end, uint8_t *at_cmp
 
 void esp_timeout_read(void)
 {
-	esp_cmd_manager.read_time_out.active = TICKER_NO_ACTIVE;
+	esp_ticker_read_time_out.active = TICKER_NO_ACTIVE;
 
 	esp_manager.read_state = 0;
 	esp_cmd_manager.read_state = 0;
@@ -767,7 +765,7 @@ void esp_timeout_read(void)
 
 void esp_timeout_write(void)
 {
-	esp_cmd_manager.write_time_out.active = TICKER_NO_ACTIVE;
+	esp_ticker_write_time_out.active = TICKER_NO_ACTIVE;
 
 	esp_manager.send = ESP_SEND_NO_INIT;
 	esp_manager.error = ESP_ERROR_SEND_DATA;
@@ -934,79 +932,6 @@ void esp_guardian_status(void)
 			break;
 	}
 }
-
-void esp_send_adc_sensor_data(void)
-{
-	/*// Calculo la media de los datos almacenados en el buffer
-	for (uint8_t i = 0 ; i < 6 ; i++)
-	{
-		adc_buffer.mean_aux = 0;
-
-		for (uint8_t j = 0 ; j < ADC_BUFFER_LENGTH ; j += ADC_MEAN_STEP)
-		{
-			adc_buffer.mean_aux += adc_buffer.data[j][i];
-		}
-
-		adc_buffer.mean[i] = (uint16_t)(adc_buffer.mean_aux / (ADC_BUFFER_LENGTH / ADC_MEAN_STEP));
-	}
-
-	//esp_send_cmd(0xC0, (uint8_t *)(&adc_buffer.mean[0]), 12);
-
-	uint8_t init_index;
-
-	esp_write_buffer_send_data_write((uint8_t *)("UNER"), 4);
-
-	ack = 13;
-	esp_write_buffer_send_data_write(&ack, 1);
-
-	esp_write_buffer_send_data_write((uint8_t *)(":"), 1);
-
-	ack = 0xC0;
-	esp_write_buffer_send_data_write(&ack, 1);
-
-	init_index = esp_buffer_cmd_write.write_index;
-
-	esp_write_buffer_send_data_write((uint8_t *)(&adc_buffer.send_esp), 1);
-
-	for (uint8_t i = 0 ; i < 6 ; i++)
-	{
-		byte_translate.u16[0] = adc_buffer.mean[i];
-
-		esp_write_buffer_send_data_write((uint8_t *)(&byte_translate.u8[0]), 1);
-		esp_write_buffer_send_data_write((uint8_t *)(&byte_translate.u8[1]), 1);
-	}
-
-	uint8_t checksum = check_xor(ack, (uint8_t *)(&esp_buffer_cmd_write.data), init_index, 13);
-
-	esp_write_buffer_send_data_write(&checksum, 1);*/
-}
-
-/*void esp_send_adc_batery_data(void)
-{
-	uint8_t init_index;
-
-	esp_write_buffer_send_data_write((uint8_t *)("UNER"), 4);
-
-	ack = 3;
-	esp_write_buffer_send_data_write(&ack, 1);
-
-	esp_write_buffer_send_data_write((uint8_t *)(":"), 1);
-
-	ack = 0xC3;
-	esp_write_buffer_send_data_write(&ack, 1);
-
-	init_index = esp_buffer_cmd_write.write_index;
-
-	esp_write_buffer_send_data_write((uint8_t *)(&adc_buffer.send_batery_esp), 1);
-
-	byte_translate.u16[0] = adc_buffer.batery;
-
-	esp_write_buffer_send_data_write((uint8_t *)(byte_translate.u8), 2);
-
-	uint8_t checksum = check_xor(ack, (uint8_t *)(&esp_buffer_cmd_write.data), init_index, 3);
-
-	esp_write_buffer_send_data_write(&checksum, 1);
-}*/
 /**********************************************************************************/
 /**********************************************************************************/
 /**********************************************************************************/

@@ -650,7 +650,7 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 				}
 
 				// Detengo el timeout
-				cmd_manager->read_time_out.active = TICKER_NO_ACTIVE;
+				cmd_manager->read_time_out->active = TICKER_NO_ACTIVE;
 
 				// El estado se resetea
 				cmd_manager->read_state = 0;
@@ -669,9 +669,9 @@ uint8_t system_check_xor(uint8_t *data, uint8_t init, uint8_t length)
 {
 	uint8_t val_xor = 0x00;
 
-	for (uint8_t i = init ; i < (uint8_t)(init + length) ; i++)
+	for (uint8_t i = 0 ; i < length ; i++)
 	{
-		val_xor ^= data[i];
+		val_xor ^= data[(uint8_t)(init + i)];
 	}
 
 	return val_xor;

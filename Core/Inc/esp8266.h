@@ -207,15 +207,6 @@ void esp_hard_reset_stop(void);
  *
  */
 void esp_guardian_status(void);
-
-/*
- * Funcion que envia los datos del ADC a la PC
- *
- * Cada un cierto periodo de tiempo seteado con un comando,
- * se envian los datos almacenados del ADC via UDP.
- *
- */
-void esp_send_adc_sensor_data(void);
 /**********************************************************************************/
 /**********************************************************************************/
 /**********************************************************************************/
