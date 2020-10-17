@@ -13,6 +13,12 @@ uint8_t system_flash_enabled;	// Seguridad de escritura de la flash
 
 /*********************************** Tickers **************************************/
 ticker_t system_ticker_flash_enable;
+
+ticker_t system_ticker_led_status;
+/**********************************************************************************/
+
+/***************************** Bufferes de datos **********************************/
+extern system_ring_buffer_t esp_buffer_write;	// Buffer de la ESP
 /**********************************************************************************/
 
 /***************************** Depuracion via USB *********************************/
@@ -21,6 +27,10 @@ uint8_t system_usb_debug;
 
 /**************************** Variables auxiliares ********************************/
 uint8_t system_index_init;	// Sirve para guardar el indice de inicio para calcular el checksum
+
+uint8_t system_aux_ack;	// Auxiliares de respuesta
+
+uint8_t system_aux_i, system_aux_j;	// Auxiliares de ateración
 /**********************************************************************************/
 
 /**********************************************************************************/
@@ -139,6 +149,17 @@ void system_init(void)
 	ticker_new(&system_ticker_flash_enable);
 	/***********************************************************************************/
 
+	/************************** Ticker para el led de estado ***************************/
+	system_ticker_led_status.ms_max = SYSTEM_LED_FAIL;
+	system_ticker_led_status.ms_count = 0;
+	system_ticker_led_status.calls = 0;
+	system_ticker_led_status.active = TICKER_ACTIVE;
+	system_ticker_led_status.priority = TICKER_LOW_PRIORITY;
+	system_ticker_led_status.ticker_function = system_led_blink;
+
+	ticker_new(&system_ticker_led_status);
+	/***********************************************************************************/
+
 	/***********************************************************************************/
 	/***********************************************************************************/
 	/***********************************************************************************/
@@ -155,9 +176,14 @@ void system_init(void)
 	/***********************************************************************************/
 }
 
-void system_led_status(void)
+void system_led_blink(void)
 {
 	HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+}
+
+void system_led_set_status(uint16_t status)
+{
+	system_ticker_led_status.ms_max = status;
 }
 
 void system_buffer_write(system_ring_buffer_t *buffer, uint8_t *data, uint8_t length)
@@ -167,6 +193,43 @@ void system_buffer_write(system_ring_buffer_t *buffer, uint8_t *data, uint8_t le
 		buffer->data[buffer->write_index] = data[i];
 		buffer->write_index++;
 	}
+}
+
+void system_write_cmd(system_ring_buffer_t *buffer, uint8_t cmd, uint8_t *payload, uint8_t length)
+{
+	system_index_init = buffer->write_index;
+
+	buffer->data[buffer->write_index] = 'U';
+	buffer->write_index++;
+
+	buffer->data[buffer->write_index] = 'N';
+	buffer->write_index++;
+
+	buffer->data[buffer->write_index] = 'E';
+	buffer->write_index++;
+
+	buffer->data[buffer->write_index] = 'R';
+	buffer->write_index++;
+
+	buffer->data[buffer->write_index] = length;
+	buffer->write_index++;
+
+	buffer->data[buffer->write_index] = ':';
+	buffer->write_index++;
+
+	buffer->data[buffer->write_index] = cmd;
+	buffer->write_index++;
+
+	for (uint8_t i = 0 ; i < length ; i++)
+	{
+		buffer->data[buffer->write_index] = payload[i];
+		buffer->write_index++;
+	}
+
+	buffer->data[buffer->write_index] =
+			system_check_xor((uint8_t *)(buffer->data),
+					system_index_init, 7 + length);
+	buffer->write_index++;
 }
 
 uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
@@ -261,7 +324,7 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 				// Se comprueba la integridad de datos
 				if (system_check_xor((uint8_t *)(cmd_manager->buffer_read->data),
 						(uint8_t)(cmd_manager->read_payload_init - 7),
-						(uint8_t)(cmd_manager->read_payload_length + 8))
+						(uint8_t)(cmd_manager->read_payload_length + 7))
 						== cmd_manager->buffer_read->data[cmd_manager->buffer_read->read_index])
 				{
 					// Analisis del comando recibido
@@ -292,191 +355,215 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 								ticker_esp_send_adc_sensor_data.active = TICKER_NO_ACTIVE;
 							}
 
-							break;
+							break;*/
 
 						case 0xC1:
-							byte_translate.u8[0] = esp_buffer_read.buffer.data[esp_buffer_read.payload_init];
-							byte_translate.u8[1] = esp_buffer_read.buffer.data[esp_buffer_read.payload_init + 1];
-							byte_translate.u8[2] = esp_buffer_read.buffer.data[esp_buffer_read.payload_init + 2];
-							byte_translate.u8[3] = esp_buffer_read.buffer.data[esp_buffer_read.payload_init + 3];
+							cmd_manager->byte_converter.u8[0] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init];
+							cmd_manager->byte_converter.u8[1] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 1];
+							cmd_manager->byte_converter.u8[2] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 2];
+							cmd_manager->byte_converter.u8[3] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 3];
 
-							pwm_set_motor_der_speed(byte_translate.f);
+							pwm_set_motor_der_speed(cmd_manager->byte_converter.f);
 
-							byte_translate.u8[0] = esp_buffer_read.buffer.data[esp_buffer_read.payload_init + 4];
-							byte_translate.u8[1] = esp_buffer_read.buffer.data[esp_buffer_read.payload_init + 5];
-							byte_translate.u8[2] = esp_buffer_read.buffer.data[esp_buffer_read.payload_init + 6];
-							byte_translate.u8[3] = esp_buffer_read.buffer.data[esp_buffer_read.payload_init + 7];
+							cmd_manager->byte_converter.u8[0] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 4];
+							cmd_manager->byte_converter.u8[1] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 5];
+							cmd_manager->byte_converter.u8[2] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 6];
+							cmd_manager->byte_converter.u8[3] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 7];
 
-							pwm_set_motor_izq_speed(byte_translate.f);
+							pwm_set_motor_izq_speed(cmd_manager->byte_converter.f);
 
-							byte_translate.u8[0] = esp_buffer_read.buffer.data[esp_buffer_read.payload_init + 8];
-							byte_translate.u8[1] = esp_buffer_read.buffer.data[esp_buffer_read.payload_init + 9];
+							cmd_manager->byte_converter.u8[0] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 8];
+							cmd_manager->byte_converter.u8[1] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 9];
 
-							if (byte_translate.u16[0] != 0)
+							if (cmd_manager->byte_converter.u16[0] != 0)
 							{
-								pwm_set_stop_motor(byte_translate.u16[0]);
+								pwm_set_stop_motor(cmd_manager->byte_converter.u16[0]);
 							}
 
-							ack = 0x00;
+							system_aux_ack = 0x00;
 
-							esp_send_cmd(0xC2, &ack, 1);
+							system_write_cmd(cmd_manager->buffer_write, 0xC1, &system_aux_ack, 1);
 
 							break;
 
 						case 0xC2:
-							if (esp_buffer_read.buffer.data[esp_buffer_read.payload_init] == 0xFF)
+							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == 0xFF)
 							{
-								byte_translate.u8[0] = esp_buffer_read.buffer.data[esp_buffer_read.payload_init + 1];
-								byte_translate.u8[1] = esp_buffer_read.buffer.data[esp_buffer_read.payload_init + 2];
+								cmd_manager->byte_converter.u8[0] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 1];
+								cmd_manager->byte_converter.u8[1] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 2];
 
-								pwm_change_freq(byte_translate.u16[0]);
+								pwm_change_freq(cmd_manager->byte_converter.u16[0]);
 							}
 
-							esp_send_cmd(0xC2, (uint8_t *)(&esp_buffer_read.buffer.data[esp_buffer_read.payload_init]), 3);
+							system_aux_ack = 0x00;
+
+							system_write_cmd(cmd_manager->buffer_write, 0xC2, &system_aux_ack, 1);
 
 							break;
 
-						case 0xC3:	// Continuar nivel de bateria
-							if (esp_buffer_read.data[esp_buffer_read.payload_init] == ADC_SEND_DATA_ON)
-							{
-								ticker_esp_send_adc_batery_data.ms_max = esp_buffer_read.data[esp_buffer_read.payload_init + 1];
+						/*
+						 * Comando que asigna el SSID
+						 *
+						 */
+						case 0xD0:
+							system_aux_ack = 0xFF;
 
-								if (ticker_esp_send_adc_batery_data.ms_max < 2000)
+							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] <= 30)
+							{
+								system_ram_user.ssid_length = cmd_manager->buffer_read->data[cmd_manager->read_payload_init];
+
+								system_aux_i = 0;
+								system_aux_j = cmd_manager->read_payload_init + 1;
+
+								while (system_aux_i < system_ram_user.ssid_length)
 								{
-									ticker_esp_send_adc_batery_data.ms_max = 2000;
+									system_ram_user.ssid[system_aux_i] = cmd_manager->buffer_read->data[system_aux_j];
+
+									system_aux_i++;
+									system_aux_j++;
 								}
 
-								if (adc_buffer.send_batery_esp == ADC_SEND_DATA_OFF)
+								system_aux_ack = 0x00;
+							}
+
+							system_write_cmd(cmd_manager->buffer_write, 0xD0, &system_aux_ack, 1);
+
+							break;
+
+						/*
+						 * Comando que asigna el PSW
+						 *
+						 */
+						case 0xD1:
+							system_aux_ack = 0xFF;
+
+							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] <= 30)
+							{
+								system_ram_user.psw_length = cmd_manager->buffer_read->data[cmd_manager->read_payload_init];
+
+								system_aux_i = 0;
+								system_aux_j = cmd_manager->read_payload_init + 1;
+
+								while (system_aux_i < system_ram_user.psw_length)
 								{
-									adc_buffer.send_batery_esp = ADC_SEND_DATA_ON;
+									system_ram_user.psw[system_aux_i] = cmd_manager->buffer_read->data[system_aux_j];
 
-									ticker_esp_send_adc_batery_data.active = TICKER_ACTIVE;
+									system_aux_i++;
+									system_aux_j++;
 								}
+
+								system_aux_ack = 0x00;
 							}
 
-							else if (esp_buffer_read.data[esp_buffer_read.payload_init] == ADC_SEND_DATA_OFF)
-							{
-								adc_buffer.send_batery_esp = ADC_SEND_DATA_OFF;
-
-								ticker_esp_send_adc_batery_data.active = TICKER_DEACTIVATE;
-							}
+							system_write_cmd(cmd_manager->buffer_write, 0xD1, &system_aux_ack, 1);
 
 							break;
 
-						case 0xD0:	// Seteo de ssid
-							flash_user_ram.ssid_length = esp_buffer_read.buffer.data[esp_buffer_read.payload_init];
+						/*
+						 * Comando que asigna la IP del micro
+						 *
+						 */
+						case 0xD2:
+							system_aux_ack = 0xFF;
 
-							i = 0;
-							j = esp_buffer_read.payload_init + 1;
-
-							while (i < flash_user_ram.ssid_length)
+							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] <= 20)
 							{
-								flash_user_ram.ssid[i] = esp_buffer_read.buffer.data[j];
+								system_ram_user.ip_mcu_length = cmd_manager->buffer_read->data[cmd_manager->read_payload_init];
 
-								i++;
-								j++;
+								system_aux_i = 0;
+								system_aux_j = cmd_manager->read_payload_init + 1;
+
+								while (system_aux_i < system_ram_user.ip_mcu_length)
+								{
+									system_ram_user.ip_mcu[system_aux_i] = cmd_manager->buffer_read->data[system_aux_j];
+
+									system_aux_i++;
+									system_aux_j++;
+								}
+
+								system_aux_ack = 0x00;
 							}
 
-							ack = 0x00;
-
-							esp_send_cmd(0xD0, &ack, 0x01);
+							system_write_cmd(cmd_manager->buffer_write, 0xD2, &system_aux_ack, 1);
 
 							break;
 
-						case 0xD1:	// Seteo de psw
-							flash_user_ram.psw_length = esp_buffer_read.buffer.data[esp_buffer_read.payload_init];
-
-							i = 0;
-							j = esp_buffer_read.payload_init + 1;
-
-							while (i < flash_user_ram.psw_length)
-							{
-								flash_user_ram.psw[i] = esp_buffer_read.buffer.data[j];
-
-								i++;
-								j++;
-							}
-
-							ack = 0x00;
-
-							esp_send_cmd(0xD1, &ack, 0x01);
-
-							break;
-
-						case 0xD2:	// Seteo de la ip del micro
-							flash_user_ram.ip_mcu_length = esp_buffer_read.buffer.data[esp_buffer_read.payload_init];
-
-							i = 0;
-							j = esp_buffer_read.payload_init + 1;
-
-							while (i < flash_user_ram.ip_mcu_length)
-							{
-								flash_user_ram.ip_mcu[i] = esp_buffer_read.buffer.data[j];
-
-								i++;
-								j++;
-							}
-
-							ack = 0x00;
-
-							esp_send_cmd(0xD2, &ack, 0x01);
-
-							break;
-
+						/*
+						 * Comando que asigna la IP de la PC
+						 *
+						 */
 						case 0xD3:	// Seteo de la ip del pc
-							flash_user_ram.ip_pc_length = esp_buffer_read.buffer.data[esp_buffer_read.payload_init];
+							system_aux_ack = 0xFF;
 
-							i = 0;
-							j = esp_buffer_read.payload_init + 1;
-
-							while (i < flash_user_ram.ip_pc_length)
+							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] <= 20)
 							{
-								flash_user_ram.ip_pc[i] = esp_buffer_read.buffer.data[j];
+								system_ram_user.ip_pc_length = cmd_manager->buffer_read->data[cmd_manager->read_payload_init];
 
-								i++;
-								j++;
-							}
+								system_aux_i = 0;
+								system_aux_j = cmd_manager->read_payload_init + 1;
 
-							ack = 0x00;
-
-							esp_send_cmd(0xD3, &ack, 0x01);
-
-							break;
-
-						case 0xD4:	// Seteo del puerto UDP
-							flash_user_ram.port_length = esp_buffer_read.buffer.data[esp_buffer_read.payload_init];
-
-							i = 0;
-							j = esp_buffer_read.payload_init + 1;
-
-							while (i < flash_user_ram.port_length)
-							{
-								flash_user_ram.port[i] = esp_buffer_read.buffer.data[j];
-
-								i++;
-								j++;
-							}
-
-							ack = 0x00;
-
-							esp_send_cmd(0xD4, &ack, 0x01);
-
-							break;
-
-						case 0xD5:	// Graba los parametros en ram en la flash
-							ack = 0xFF;
-
-							if (esp_buffer_read.buffer.data[esp_buffer_read.payload_init] == 0xFF)
-							{
-								if (save_flash_data() == HAL_OK)
+								while (system_aux_i < system_ram_user.ip_pc_length)
 								{
-									ack = 0x00;
+									system_ram_user.ip_pc[system_aux_i] = cmd_manager->buffer_read->data[system_aux_j];
+
+									system_aux_i++;
+									system_aux_j++;
+								}
+
+								system_aux_ack = 0x00;
+							}
+
+							system_write_cmd(cmd_manager->buffer_write, 0xD3, &system_aux_ack, 1);
+
+							break;
+
+						/*
+						 * Comando que asigna el puerto UDP para la comunicacion
+						 *
+						 */
+						case 0xD4:
+							system_aux_ack = 0xFF;
+
+							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] <= 10)
+							{
+								system_ram_user.port_length = cmd_manager->buffer_read->data[cmd_manager->read_payload_init];
+
+								system_aux_i = 0;
+								system_aux_j = cmd_manager->read_payload_init + 1;
+
+								while (system_aux_i < system_ram_user.port_length)
+								{
+									system_ram_user.port[system_aux_i] = cmd_manager->buffer_read->data[system_aux_j];
+
+									system_aux_i++;
+									system_aux_j++;
+								}
+
+								system_aux_ack = 0x00;
+							}
+
+							system_write_cmd(cmd_manager->buffer_write, 0xD4, &system_aux_ack, 1);
+
+							break;
+
+						/*
+						 * ¡¡CUIDADO ESTE COMANDO GRABA LOS DATOS DE LA RAM EN LA FLASH!!
+						 *
+						 */
+						case 0xD5:
+							system_aux_ack = 0xFF;
+
+							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == 0xFF)
+							{
+								if (system_flash_save_data() == HAL_OK)
+								{
+									system_aux_ack = 0x00;
 								}
 							}
 
-							esp_send_cmd(0xD5, &ack, 0x01);
+							system_write_cmd(cmd_manager->buffer_write, 0xD5, &system_aux_ack, 1);
 
-							break;*/
+							break;
 
 						/*
 						 * ALIVE
@@ -485,42 +572,74 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 						 *
 						 */
 						case 0xF0:
-							system_index_init = cmd_manager->buffer_write->write_index;
-
-							cmd_manager->buffer_write->data[cmd_manager->buffer_write->write_index++] = 'U';
-							cmd_manager->buffer_write->data[cmd_manager->buffer_write->write_index++] = 'N';
-							cmd_manager->buffer_write->data[cmd_manager->buffer_write->write_index++] = 'E';
-							cmd_manager->buffer_write->data[cmd_manager->buffer_write->write_index++] = 'R';
-							cmd_manager->buffer_write->data[cmd_manager->buffer_write->write_index++] = 0;
-							cmd_manager->buffer_write->data[cmd_manager->buffer_write->write_index++] = ':';
-							cmd_manager->buffer_write->data[cmd_manager->buffer_write->write_index++] = 0xF0;
-							cmd_manager->buffer_write->data[cmd_manager->buffer_write->write_index++] =
-									system_check_xor((uint8_t *)(cmd_manager->buffer_write->data), system_index_init, 7);
+							system_write_cmd(cmd_manager->buffer_write, 0xF0, 0, 0);
 
 							break;
 
-						/*case 0xF2:	// Envio de comando AT
-							for (uint8_t i = 0 ; i < esp_buffer_read.payload_length ; i++)
+						/*
+						 * Comando que activa la depuración via USB
+						 *
+						 */
+						case 0xF1:
+							system_aux_ack = 0xFF;
+
+							// Activo el modo de depuracion
+							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == SYSTEM_USB_DEBUG_ON)
 							{
-								esp_write_buffer_write((uint8_t *)(&esp_buffer_read.buffer.data[esp_buffer_read.payload_init + i]), 1);
+								system_usb_debug = SYSTEM_USB_DEBUG_ON;
+
+								system_aux_ack = 0x00;
 							}
 
-							esp_write_buffer_write((uint8_t *)("\r\n"), 2);
+							// Desactivo el modo de depuracion
+							else if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == SYSTEM_USB_DEBUG_OFF)
+							{
+								system_usb_debug = SYSTEM_USB_DEBUG_OFF;
+
+								system_aux_ack = 0x00;
+							}
+
+							system_write_cmd(cmd_manager->buffer_write, 0xF1, &system_aux_ack, 1);
 
 							break;
 
-						case 0xF3:	// Envio de datos
-							for (uint8_t i = 0 ; i < esp_buffer_read.payload_length ; i++)
+						/*
+						 * Comando para enviar comandos AT a la ESP
+						 *
+						 */
+						case 0xF2:
+							for (uint8_t i = 0 ; i < cmd_manager->read_payload_length ; i++)
 							{
-								esp_write_buffer_write((uint8_t *)(&esp_buffer_read.buffer.data[esp_buffer_read.payload_init + i]), 1);
+								system_buffer_write(&esp_buffer_write,
+										(uint8_t *)(&cmd_manager->buffer_read->data[cmd_manager->read_payload_init + i]), 1);
+							}
+
+							system_buffer_write(&esp_buffer_write, (uint8_t *)("\r\n"), 2);
+
+							break;
+
+						/*
+						 * Comando para enviar datos a la ESP
+						 *
+						 */
+						case 0xF3:
+							for (uint8_t i = 0 ; i < cmd_manager->read_payload_length ; i++)
+							{
+								system_buffer_write(&esp_buffer_write,
+										(uint8_t *)(&cmd_manager->buffer_read->data[cmd_manager->read_payload_init + i]), 1);
 							}
 
 							break;
 
-						default:	// Comando no valido
-							esp_send_cmd(0xFF, (uint8_t *)(&esp_buffer_read.buffer.data[esp_buffer_read.payload_init - 1]), 0x01);
+						/*
+						 * Se recibio un comando que no es identificable
+						 *
+						 */
+						default:
+							system_aux_ack = cmd_manager->buffer_read->data[cmd_manager->read_payload_init - 1];
 
-							break;*/
+							system_write_cmd(cmd_manager->buffer_write, 0xFF, &system_aux_ack, 1);
+							break;
 					}
 				}
 
@@ -566,6 +685,7 @@ HAL_StatusTypeDef system_flash_save_data(void)
 	if (system_flash_enabled == SYSTEM_FLASH_SAVE_DATA_ENABLED)
 	{
 		system_flash_enabled = SYSTEM_FLASH_SAVE_DATA_DISABLED;	// Indica que se escribio en la flash y la desactiva
+		system_ticker_flash_enable.ms_count = 0;	// Reinicia timer
 
 		uint32_t memory_address = (uint32_t)(&system_flash_user);
 		uint32_t page_error = 0;

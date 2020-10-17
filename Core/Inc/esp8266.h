@@ -13,17 +13,6 @@
 /*********************************** Defines **************************************/
 /**********************************************************************************/
 
-/************************** Lectura de datos de la ESP ****************************/
-#define ESP_DATA_WAIT_INIT					0
-#define ESP_DATA_WAIT_END_AT				1
-#define ESP_DATA_AT_COMMAND					2
-#define ESP_DATA_WAIT_SEND					3
-#define ESP_DATA_WAIT_STATE					4
-#define ESP_DATA_WAIT_END_STATE				5
-#define ESP_DATA_STATE						6
-#define ESP_DATA_RECEIVE					7
-/**********************************************************************************/
-
 /****************************** Estados de inicio *********************************/
 #define ESP_STATUS_NO_INIT					0
 #define ESP_STATUS_INIT						1

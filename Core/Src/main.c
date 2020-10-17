@@ -124,6 +124,8 @@ int main(void)
 	  esp_read_pending();	// Comprueba si llegaron datos via ESP
 	  esp_write_pending();	// Comprueba si hay que enviar datos via ESP
 
+	  esp_write_send_data_pending();	// Envia los comandos en cola
+
 	  esp_guardian_status();	// Comprueba si ocurrio algun evento inesperado en la ESP
 	  /***********************************************************************************/
 

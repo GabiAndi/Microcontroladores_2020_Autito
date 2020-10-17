@@ -28,13 +28,14 @@
 /**********************************************************************************/
 
 /******************************** Led de estado ***********************************/
-#define SYSTEM_LED_OK							1000
 #define SYSTEM_LED_FAIL							50
+#define SYSTEM_LED_INIT							500
+#define SYSTEM_LED_OK							2000
 /**********************************************************************************/
 
 /******************************** Modo de debug ***********************************/
-#define SYSTEM_USB_DEBUG_OFF					0
-#define SYSTEM_USB_DEBUG_ON						1
+#define SYSTEM_USB_DEBUG_OFF					0x00
+#define SYSTEM_USB_DEBUG_ON						0xFF
 /**********************************************************************************/
 
 /******************************* Envio de datos ***********************************/
@@ -141,7 +142,13 @@ void system_init(void);
  * Da un indicador visual al usuario sobre el estado del autito.
  *
  */
-void system_led_status(void);
+void system_led_blink(void);
+
+/*
+ * Función que establece el estado del LED
+ *
+ */
+void system_led_set_status(uint16_t status);
 
 /*
  * Funcion que escribe en un buffer
@@ -151,6 +158,15 @@ void system_led_status(void);
  *
  */
 void system_buffer_write(system_ring_buffer_t *buffer, uint8_t *data, uint8_t length);
+
+/*
+ * Funcion que escribe un comando en un buffer
+ *
+ * Escribe datos en un buffer sin necesidad de acceder a los indices
+ * directamente.
+ *
+ */
+void system_write_cmd(system_ring_buffer_t *buffer, uint8_t cmd, uint8_t *payload, uint8_t length);
 
 /*
  * Funcion que se encarga de analizar un paquete

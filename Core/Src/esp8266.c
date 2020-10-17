@@ -9,7 +9,6 @@ extern system_flash_data_t system_ram_user;
 /**********************************************************************************/
 
 /*********************************** Tickers **************************************/
-ticker_t esp_ticker_write_send_data_pending;
 ticker_t esp_ticker_connect_to_ap;
 ticker_t esp_ticker_hard_reset_stop;
 ticker_t esp_ticker_send_adc_sensor_data;
@@ -24,7 +23,7 @@ system_ring_buffer_t esp_buffer_read;
 system_ring_buffer_t esp_buffer_write;
 system_ring_buffer_t esp_buffer_cmd_write;
 
-extern system_ring_buffer_t usbcdc_buffer_read;
+extern system_ring_buffer_t usbcdc_buffer_write;
 /**********************************************************************************/
 
 /*************************** Manejador de comandos ********************************/
@@ -115,7 +114,7 @@ void esp_init(void)
 	esp_manager.udp = ESP_UDP_NO_INIT;
 	esp_manager.send = ESP_SEND_NO_INIT;
 
-	esp_manager.read_state = ESP_DATA_WAIT_INIT;
+	esp_manager.read_state = 0;
 
 	esp_manager.cmd = ESP_COMMAND_IDLE;
 
@@ -133,30 +132,9 @@ void esp_init(void)
 	/************************** Inicializacion de los tickers **************************/
 	/***********************************************************************************/
 
-	/*// Ticker para el led de estado
-	ticker_esp_led_status.ms_count = 0;
-	ticker_esp_led_status.ms_max = LED_FAIL;
-	ticker_esp_led_status.calls = 0;
-	ticker_esp_led_status.priority = TICKER_LOW_PRIORITY;
-	ticker_esp_led_status.ticker_function = esp_led_status;
-	ticker_esp_led_status.active = TICKER_ACTIVE;
-
-	ticker_new(&ticker_esp_led_status);*/
-
-	/*********************** Ticker para el envio de datos UDP *************************/
-	esp_ticker_write_send_data_pending.ms_count = 0;
-	esp_ticker_write_send_data_pending.ms_max = 100;
-	esp_ticker_write_send_data_pending.calls = 0;
-	esp_ticker_write_send_data_pending.priority = TICKER_LOW_PRIORITY;
-	esp_ticker_write_send_data_pending.ticker_function = esp_write_send_data_pending;
-	esp_ticker_write_send_data_pending.active = TICKER_ACTIVE;
-
-	ticker_new(&esp_ticker_write_send_data_pending);
-	/***********************************************************************************/
-
 	/**************************** Ticker de autoconectado  *****************************/
 	esp_ticker_connect_to_ap.ms_count = 0;
-	esp_ticker_connect_to_ap.ms_max = 100;
+	esp_ticker_connect_to_ap.ms_max = 200;
 	esp_ticker_connect_to_ap.calls = 0;
 	esp_ticker_connect_to_ap.priority = TICKER_LOW_PRIORITY;
 	esp_ticker_connect_to_ap.ticker_function = esp_connect_to_ap;
@@ -191,9 +169,6 @@ void esp_init(void)
 	/***********************************************************************************/
 	/***********************************************************************************/
 
-	// Inicia la captura de datos via USART
-	HAL_UART_Receive_IT(&huart3, (uint8_t *)(&esp_manager.byte_receibe_usart), 1);
-
 	// Inicializamos la ESP
 	esp_hard_reset();
 }
@@ -207,7 +182,7 @@ void esp_read_pending(void)
 		switch (esp_manager.read_state)
 		{
 			// Estado en donde se identifica que tipo de información se esta recibiendo
-			case ESP_DATA_WAIT_INIT:
+			case 0:
 				// Si el byte actual no es ningun caracter de separación se esta ante un nuevo comando
 				if ((esp_buffer_read.data[esp_buffer_read.read_index] != '\r') &&
 						(esp_buffer_read.data[esp_buffer_read.read_index] != '\n'))
@@ -219,19 +194,19 @@ void esp_read_pending(void)
 					// Si se recibio un > es porque se va a enviar datos via UDP
 					if (esp_buffer_read.data[esp_buffer_read.read_index] == '>')
 					{
-						esp_manager.read_state = ESP_DATA_WAIT_SEND;
+						esp_manager.read_state = 3;
 					}
 
 					// Si se recibe un + es porque se esta ante un comando de estado
 					else if (esp_buffer_read.data[esp_buffer_read.read_index] == '+')
 					{
-						esp_manager.read_state = ESP_DATA_WAIT_STATE;
+						esp_manager.read_state = 4;
 					}
 
 					// Si paquete inicia de cualquier otra manera se esta ante un comando AT
 					else
 					{
-						esp_manager.read_state = ESP_DATA_WAIT_END_AT;
+						esp_manager.read_state = 1;
 
 						// Se guarda la posición de inicio del comando
 						esp_manager.cmd_init = esp_buffer_read.read_index;
@@ -241,11 +216,11 @@ void esp_read_pending(void)
 				break;
 
 			// Fin de la recepción de un comando AT
-			case ESP_DATA_WAIT_END_AT:
+			case 1:
 				if ((esp_buffer_read.data[esp_buffer_read.read_index] == '\r') ||
 						(esp_buffer_read.data[esp_buffer_read.read_index] == '\n'))
 				{
-					esp_manager.read_state = ESP_DATA_AT_COMMAND;
+					esp_manager.read_state = 2;
 
 					// Se guarda la posición de fin del comando
 					esp_manager.cmd_end = esp_buffer_read.read_index - 1;
@@ -254,10 +229,10 @@ void esp_read_pending(void)
 				break;
 
 			// Se analiza el comando que se recibio
-			case ESP_DATA_AT_COMMAND:
+			case 2:
 				esp_cmd_manager.read_time_out.active = TICKER_NO_ACTIVE;
 
-				esp_manager.read_state = ESP_DATA_WAIT_INIT;
+				esp_manager.read_state = 0;
 
 				/*****************************************************************************************/
 				/****************************************** Eco ******************************************/
@@ -340,6 +315,80 @@ void esp_read_pending(void)
 						(uint8_t *)("AT+CIPSEND="), 11))
 				{
 					esp_manager.cmd = ESP_COMMAND_AT_CIPSEND;
+				}
+				/*****************************************************************************************/
+
+				/*****************************************************************************************/
+				/*****************************************************************************************/
+				/*****************************************************************************************/
+
+				/*****************************************************************************************/
+				/**************************************** Estados ****************************************/
+				/*****************************************************************************************/
+
+				/************************************ Estado: STATUS:2 ***********************************/
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data),
+						esp_manager.cmd_init,
+						esp_manager.cmd_end,
+						(uint8_t *)("STATUS:2"), 8))
+				{
+					esp_manager.connected = ESP_CONNECTED;
+					esp_manager.udp = ESP_UDP_NO_INIT;
+				}
+				/*****************************************************************************************/
+
+				/************************************ Estado: STATUS:3 ***********************************/
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data),
+						esp_manager.cmd_init,
+						esp_manager.cmd_end,
+						(uint8_t *)("STATUS:3"), 8))
+				{
+					esp_manager.connected = ESP_CONNECTED;
+					esp_manager.udp = ESP_UDP_INIT;
+				}
+				/*****************************************************************************************/
+
+				/************************************ Estado: STATUS:5 ***********************************/
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data),
+						esp_manager.cmd_init,
+						esp_manager.cmd_end,
+						(uint8_t *)("STATUS:5"), 8))
+				{
+					esp_manager.connected = ESP_DISCONNECTED;
+					esp_manager.udp = ESP_UDP_NO_INIT;
+				}
+				/*****************************************************************************************/
+
+				/********************************* Estado: WIFI CONNECTED ********************************/
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data),
+						esp_manager.cmd_init,
+						esp_manager.cmd_end,
+						(uint8_t *)("WIFI CONNECTED"), 14))
+				{
+					esp_manager.connected = ESP_CONNECTED;
+					esp_manager.udp = ESP_UDP_NO_INIT;
+				}
+				/*****************************************************************************************/
+
+				/*********************************** Estado: WIFI GOT IP *********************************/
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data),
+						esp_manager.cmd_init,
+						esp_manager.cmd_end,
+						(uint8_t *)("WIFI GOT IP"), 11))
+				{
+					esp_manager.connected = ESP_CONNECTED_GOT_IP;
+					esp_manager.udp = ESP_UDP_NO_INIT;
+				}
+				/*****************************************************************************************/
+
+				/********************************* Estado: WIFI DISCONNECT *******************************/
+				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data),
+						esp_manager.cmd_init,
+						esp_manager.cmd_end,
+						(uint8_t *)("WIFI DISCONNECT"), 15))
+				{
+					esp_manager.connected = ESP_DISCONNECTED;
+					esp_manager.udp = ESP_UDP_NO_INIT;
 				}
 				/*****************************************************************************************/
 
@@ -493,11 +542,11 @@ void esp_read_pending(void)
 				break;
 
 			// Esperando para poder enviar
-			case ESP_DATA_WAIT_SEND:
+			case 3:
 				if (esp_buffer_read.data[esp_buffer_read.read_index] == ' ')
 				{
 					esp_cmd_manager.read_time_out.active = TICKER_NO_ACTIVE;
-					esp_manager.read_state = ESP_DATA_WAIT_INIT;
+					esp_manager.read_state = 0;
 
 					esp_manager.send = ESP_SEND_READY;
 				}
@@ -505,25 +554,25 @@ void esp_read_pending(void)
 				break;
 
 			// Se comprueba el comando de estado que se recibio
-			case ESP_DATA_WAIT_STATE:
+			case 4:
 				if (esp_buffer_read.data[esp_buffer_read.read_index] == 'I')
 				{
-					esp_manager.read_state = ESP_DATA_RECEIVE;
+					esp_manager.read_state = 7;
 				}
 
 				else
 				{
-					esp_manager.read_state = ESP_DATA_WAIT_END_STATE;
+					esp_manager.read_state = 5;
 				}
 
 				break;
 
-			// Fin de la recepción de un comando AT
-			case ESP_DATA_WAIT_END_STATE:
+			// Fin de la recepción de un estado AT
+			case 5:
 				if ((esp_buffer_read.data[esp_buffer_read.read_index] == '\r') ||
 						(esp_buffer_read.data[esp_buffer_read.read_index] == '\n'))
 				{
-					esp_manager.read_state = ESP_DATA_STATE;
+					esp_manager.read_state = 6;
 
 					// Se guarda la posición de fin del comando
 					esp_manager.cmd_end = esp_buffer_read.read_index - 1;
@@ -532,49 +581,16 @@ void esp_read_pending(void)
 				break;
 
 			// Se analiza el estado que se recibio
-			case ESP_DATA_STATE:
+			case 6:
 				esp_cmd_manager.read_time_out.active = TICKER_NO_ACTIVE;
-				esp_manager.read_state = ESP_DATA_WAIT_INIT;
+				esp_manager.read_state = 0;
 
 				/*****************************************************************************************/
 				/**************************************** Estados ****************************************/
 				/*****************************************************************************************/
 
-				/************************************ Estado: STATUS:2 ***********************************/
-				if (esp_at_cmp((uint8_t *)(esp_buffer_read.data),
-						esp_manager.cmd_init,
-						esp_manager.cmd_end,
-						(uint8_t *)("STATUS:2"), 8))
-				{
-					esp_manager.connected = ESP_CONNECTED;
-					esp_manager.udp = ESP_UDP_NO_INIT;
-				}
-				/*****************************************************************************************/
-
-				/************************************ Estado: STATUS:3 ***********************************/
-				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data),
-						esp_manager.cmd_init,
-						esp_manager.cmd_end,
-						(uint8_t *)("STATUS:3"), 8))
-				{
-					esp_manager.connected = ESP_CONNECTED;
-					esp_manager.udp = ESP_UDP_INIT;
-				}
-				/*****************************************************************************************/
-
-				/************************************ Estado: STATUS:5 ***********************************/
-				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data),
-						esp_manager.cmd_init,
-						esp_manager.cmd_end,
-						(uint8_t *)("STATUS:5"), 8))
-				{
-					esp_manager.connected = ESP_DISCONNECTED;
-					esp_manager.udp = ESP_UDP_NO_INIT;
-				}
-				/*****************************************************************************************/
-
 				/************************************ Estado: +CWJAP:1 ***********************************/
-				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data),
+				if (esp_at_cmp((uint8_t *)(esp_buffer_read.data),
 						esp_manager.cmd_init,
 						esp_manager.cmd_end,
 						(uint8_t *)("+CWJAP:1"), 8))
@@ -621,39 +637,6 @@ void esp_read_pending(void)
 				}
 				/*****************************************************************************************/
 
-				/********************************* Estado: WIFI CONNECTED ********************************/
-				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data),
-						esp_manager.cmd_init,
-						esp_manager.cmd_end,
-						(uint8_t *)("WIFI CONNECTED"), 14))
-				{
-					esp_manager.connected = ESP_CONNECTED;
-					esp_manager.udp = ESP_UDP_NO_INIT;
-				}
-				/*****************************************************************************************/
-
-				/*********************************** Estado: WIFI GOT IP *********************************/
-				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data),
-						esp_manager.cmd_init,
-						esp_manager.cmd_end,
-						(uint8_t *)("WIFI GOT IP"), 11))
-				{
-					esp_manager.connected = ESP_CONNECTED_GOT_IP;
-					esp_manager.udp = ESP_UDP_NO_INIT;
-				}
-				/*****************************************************************************************/
-
-				/********************************* Estado: WIFI DISCONNECT *******************************/
-				else if (esp_at_cmp((uint8_t *)(esp_buffer_read.data),
-						esp_manager.cmd_init,
-						esp_manager.cmd_end,
-						(uint8_t *)("WIFI DISCONNECT"), 15))
-				{
-					esp_manager.connected = ESP_DISCONNECTED;
-					esp_manager.udp = ESP_UDP_NO_INIT;
-				}
-				/*****************************************************************************************/
-
 				/*****************************************************************************************/
 				/*****************************************************************************************/
 				/*****************************************************************************************/
@@ -661,11 +644,11 @@ void esp_read_pending(void)
 				break;
 
 			// Recepcion de datos via UDP
-			case ESP_DATA_RECEIVE:
+			case 7:
 				// Si se termino de analizar el paquete se resetea el estado de la lectura
 				if (system_data_package(&esp_cmd_manager))
 				{
-					esp_manager.read_state = ESP_DATA_WAIT_INIT;
+					esp_manager.read_state = 0;
 				}
 
 				break;
@@ -680,7 +663,10 @@ void esp_write_pending(void)
 	// Si hay datos en el buffer para enviar enviamos
 	if (esp_buffer_write.read_index != esp_buffer_write.write_index)
 	{
-		HAL_UART_Transmit_IT(&huart3, (uint8_t *)(&esp_buffer_write.data[esp_buffer_write.read_index++]), 1);
+		if (HAL_UART_Transmit_IT(&huart3, (uint8_t *)(&esp_buffer_write.data[esp_buffer_write.read_index]), 1) == HAL_OK)
+		{
+			esp_buffer_write.read_index++;
+		}
 	}
 }
 
@@ -726,8 +712,10 @@ void esp_write_send_data_pending(void)
 		case ESP_SEND_READY:
 			while (esp_manager.send_data_length > 0)
 			{
-				esp_buffer_write.data[esp_buffer_cmd_write.write_index++] =
-						esp_buffer_cmd_write.data[esp_buffer_cmd_write.read_index++];
+				esp_buffer_write.data[esp_buffer_write.write_index] = esp_buffer_cmd_write.data[esp_buffer_cmd_write.read_index];
+
+				esp_buffer_write.write_index++;
+				esp_buffer_cmd_write.read_index++;
 
 				esp_manager.send_data_length--;
 			}
@@ -802,6 +790,8 @@ void esp_connect_to_ap(void)
 				if (esp_manager.status == ESP_STATUS_INIT)
 				{
 					esp_manager.auto_connection = 2;
+
+					system_led_set_status(SYSTEM_LED_INIT);
 				}
 
 				break;
@@ -876,6 +866,8 @@ void esp_connect_to_ap(void)
 					esp_ticker_connect_to_ap.active = TICKER_NO_ACTIVE;
 
 					esp_manager.auto_connection = 0;
+
+					system_led_set_status(SYSTEM_LED_OK);
 				}
 
 				break;
@@ -913,6 +905,9 @@ void esp_hard_reset(void)
 
 	esp_ticker_hard_reset_stop.ms_count = 0;
 	esp_ticker_hard_reset_stop.active = TICKER_ACTIVE;
+
+	// Se detiene la captura de datos
+	HAL_UART_Abort_IT(&huart3);
 }
 
 void esp_hard_reset_stop(void)
@@ -924,7 +919,8 @@ void esp_hard_reset_stop(void)
 	esp_ticker_connect_to_ap.ms_count = 0;
 	esp_ticker_connect_to_ap.active = TICKER_ACTIVE;
 
-	HAL_Delay(2000);
+	// Inicia la captura de datos via USART
+	HAL_UART_Receive_IT(&huart3, (uint8_t *)(&esp_manager.byte_receibe_usart), 1);
 }
 
 void esp_guardian_status(void)
@@ -1027,11 +1023,13 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
 	if (huart->Instance == USART3)
 	{
-		esp_buffer_read.data[esp_buffer_read.write_index++] = esp_manager.byte_receibe_usart;
+		esp_buffer_read.data[esp_buffer_read.write_index] = esp_manager.byte_receibe_usart;
+		esp_buffer_read.write_index++;
 
 		if (system_usb_debug == SYSTEM_USB_DEBUG_ON)
 		{
-			usbcdc_buffer_read.data[usbcdc_buffer_read.write_index++] = esp_manager.byte_receibe_usart;
+			usbcdc_buffer_write.data[usbcdc_buffer_write.write_index] = esp_manager.byte_receibe_usart;
+			usbcdc_buffer_write.write_index++;
 		}
 
 		HAL_UART_Receive_IT(&huart3, (uint8_t *)(&esp_manager.byte_receibe_usart), 1);
