@@ -15,14 +15,24 @@ uint8_t system_flash_enabled;	// Seguridad de escritura de la flash
 ticker_t system_ticker_flash_enable;
 
 ticker_t system_ticker_led_status;
+
+ticker_t system_ticker_adc_send_data;
 /**********************************************************************************/
 
 /***************************** Bufferes de datos **********************************/
 extern system_ring_buffer_t esp_buffer_write;	// Buffer de la ESP
+
+extern adc_buffer_t adc_buffer;
+
+system_ring_buffer_t *system_adc_buffer_send_data;
 /**********************************************************************************/
 
 /***************************** Depuracion via USB *********************************/
 uint8_t system_usb_debug;
+/**********************************************************************************/
+
+/**************************** Conversion de datos *********************************/
+system_byte_converter_u system_byte_converter;
 /**********************************************************************************/
 
 /**************************** Variables auxiliares ********************************/
@@ -30,7 +40,7 @@ uint8_t system_index_init;	// Sirve para guardar el indice de inicio para calcul
 
 uint8_t system_aux_ack;	// Auxiliares de respuesta
 
-uint8_t system_aux_i, system_aux_j;	// Auxiliares de ateración
+uint8_t system_aux_i, system_aux_j;	// Auxiliares de iteración
 /**********************************************************************************/
 
 /**********************************************************************************/
@@ -59,7 +69,9 @@ void system_init(void)
 		memset(&system_ram_user, 0, sizeof(system_flash_data_t));
 	}
 
+	/***********************************************************************************/
 	/*************************** Configuracion de prueba *******************************/
+	/***********************************************************************************/
 	system_ram_user.ssid_length = 10;
 
 	system_ram_user.ssid[0] = 'T';
@@ -129,8 +141,18 @@ void system_init(void)
 	system_ram_user.port[3] = '0';
 	system_ram_user.port[4] = '0';
 	/***********************************************************************************/
+	/***********************************************************************************/
+	/***********************************************************************************/
 
 	system_flash_enabled = SYSTEM_FLASH_SAVE_DATA_ENABLED;	// Se habilita la flash para poder escribir
+
+	/***********************************************************************************/
+	/************************* Inicializacion de los bufferes **************************/
+	/***********************************************************************************/
+	system_adc_buffer_send_data = 0;
+	/***********************************************************************************/
+	/***********************************************************************************/
+	/***********************************************************************************/
 
 	ticker_init_core();	// Inicia la configuracion de los tickers
 
@@ -160,6 +182,17 @@ void system_init(void)
 	ticker_new(&system_ticker_led_status);
 	/***********************************************************************************/
 
+	/************************** Ticker envio de datos del adc **************************/
+	system_ticker_adc_send_data.ms_count = 0;
+	system_ticker_adc_send_data.ms_max = 255;
+	system_ticker_adc_send_data.calls = 0;
+	system_ticker_adc_send_data.priority = TICKER_LOW_PRIORITY;
+	system_ticker_adc_send_data.ticker_function = system_adc_send_data;
+	system_ticker_adc_send_data.active = TICKER_NO_ACTIVE;
+
+	ticker_new(&system_ticker_adc_send_data);
+	/***********************************************************************************/
+
 	/***********************************************************************************/
 	/***********************************************************************************/
 	/***********************************************************************************/
@@ -167,8 +200,6 @@ void system_init(void)
 	/***********************************************************************************/
 	/************************** Inicializacion de los modulos **************************/
 	/***********************************************************************************/
-	esp_init();	// Inicia la configuracion del ESP
-	usbcdc_init();	// Inicia la configuracion del USB
 	adc_init();	// Inicia la configuracion del ADC
 	pwm_init();	// Inicia la configuracion del PWM
 	/***********************************************************************************/
@@ -178,7 +209,7 @@ void system_init(void)
 
 void system_led_blink(void)
 {
-	HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+	HAL_GPIO_TogglePin(SYSTEM_LED_GPIO_Port, SYSTEM_LED_Pin);
 }
 
 void system_led_set_status(uint16_t status)
@@ -330,54 +361,59 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 					// Analisis del comando recibido
 					switch (cmd_manager->buffer_read->data[cmd_manager->read_payload_init - 1])
 					{
-						/*case 0xC0:	// Modo de envio de datos a la pc
-							if (esp_buffer_read.buffer.data[esp_buffer_read.payload_init] == ADC_SEND_DATA_ON)
+						/*
+						 * Comando que setea el modo de envio de datos a la PC
+						 *
+						 */
+						case 0xC0:
+							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == SYSTEM_ADC_SEND_DATA_ON)
 							{
-								ticker_esp_send_adc_sensor_data.ms_max = esp_buffer_read.buffer.data[esp_buffer_read.payload_init + 1];
+								system_ticker_adc_send_data.ms_max = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 1];
 
-								if (ticker_esp_send_adc_sensor_data.ms_max < 150)
+								if (system_ticker_adc_send_data.ms_max < 150)
 								{
-									ticker_esp_send_adc_sensor_data.ms_max = 150;
+									system_ticker_adc_send_data.ms_max = 150;
 								}
 
-								if (adc_buffer.send_esp == ADC_SEND_DATA_OFF)
-								{
-									adc_buffer.send_esp = ADC_SEND_DATA_ON;
+								system_ticker_adc_send_data.active = TICKER_ACTIVE;
 
-									ticker_esp_send_adc_sensor_data.active = TICKER_ACTIVE;
-								}
+								system_adc_buffer_send_data = cmd_manager->buffer_write;
 							}
 
-							else if (esp_buffer_read.buffer.data[esp_buffer_read.payload_init] == ADC_SEND_DATA_OFF)
+							else if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == SYSTEM_ADC_SEND_DATA_OFF)
 							{
-								adc_buffer.send_esp = ADC_SEND_DATA_OFF;
+								system_ticker_adc_send_data.active = TICKER_NO_ACTIVE;
 
-								ticker_esp_send_adc_sensor_data.active = TICKER_NO_ACTIVE;
+								system_adc_buffer_send_data = 0;
 							}
 
-							break;*/
+							break;
 
+						/*
+						 * Comando que asigna el duty cycle al PWM
+						 *
+						 */
 						case 0xC1:
-							cmd_manager->byte_converter.u8[0] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init];
-							cmd_manager->byte_converter.u8[1] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 1];
-							cmd_manager->byte_converter.u8[2] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 2];
-							cmd_manager->byte_converter.u8[3] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 3];
+							system_byte_converter.u8[0] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init];
+							system_byte_converter.u8[1] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 1];
+							system_byte_converter.u8[2] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 2];
+							system_byte_converter.u8[3] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 3];
 
-							pwm_set_motor_der_speed(cmd_manager->byte_converter.f);
+							pwm_set_motor_der_speed(system_byte_converter.f);
 
-							cmd_manager->byte_converter.u8[0] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 4];
-							cmd_manager->byte_converter.u8[1] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 5];
-							cmd_manager->byte_converter.u8[2] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 6];
-							cmd_manager->byte_converter.u8[3] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 7];
+							system_byte_converter.u8[0] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 4];
+							system_byte_converter.u8[1] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 5];
+							system_byte_converter.u8[2] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 6];
+							system_byte_converter.u8[3] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 7];
 
-							pwm_set_motor_izq_speed(cmd_manager->byte_converter.f);
+							pwm_set_motor_izq_speed(system_byte_converter.f);
 
-							cmd_manager->byte_converter.u8[0] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 8];
-							cmd_manager->byte_converter.u8[1] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 9];
+							system_byte_converter.u8[0] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 8];
+							system_byte_converter.u8[1] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 9];
 
-							if (cmd_manager->byte_converter.u16[0] != 0)
+							if (system_byte_converter.u16[0] != 0)
 							{
-								pwm_set_stop_motor(cmd_manager->byte_converter.u16[0]);
+								pwm_set_stop_motor(system_byte_converter.u16[0]);
 							}
 
 							system_aux_ack = 0x00;
@@ -386,13 +422,17 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 
 							break;
 
+						/*
+						 * Comando que asigna la frecuencia al PWM
+						 *
+						 */
 						case 0xC2:
 							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == 0xFF)
 							{
-								cmd_manager->byte_converter.u8[0] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 1];
-								cmd_manager->byte_converter.u8[1] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 2];
+								system_byte_converter.u8[0] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 1];
+								system_byte_converter.u8[1] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 2];
 
-								pwm_change_freq(cmd_manager->byte_converter.u16[0]);
+								pwm_change_freq(system_byte_converter.u16[0]);
 							}
 
 							system_aux_ack = 0x00;
@@ -740,6 +780,14 @@ uint8_t system_flash_check_integrity(system_flash_data_t *flash_data)
 void system_flash_enable(void)
 {
 	system_flash_enabled = SYSTEM_FLASH_SAVE_DATA_ENABLED;	// Habilita la escritura de la flash
+}
+
+void system_adc_send_data(void)
+{
+	if (system_adc_buffer_send_data != 0)
+	{
+		system_write_cmd(system_adc_buffer_send_data, 0xC0, &((uint8_t *)(adc_buffer.mean))[0], 12);
+	}
 }
 /**********************************************************************************/
 /**********************************************************************************/

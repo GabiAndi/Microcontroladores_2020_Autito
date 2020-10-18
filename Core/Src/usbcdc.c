@@ -64,8 +64,6 @@ void usbcdc_init(void)
 	usbcdc_cmd_manager.read_time_out = &usbcdc_ticker_read_time_out;
 
 	usbcdc_cmd_manager.buffer_write = &usbcdc_buffer_write;
-
-	usbcdc_cmd_manager.byte_converter.u32 = 0;
 	/***********************************************************************************/
 	/***********************************************************************************/
 	/***********************************************************************************/

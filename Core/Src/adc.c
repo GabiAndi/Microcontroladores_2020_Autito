@@ -19,7 +19,7 @@ adc_buffer_t adc_buffer;
 /**********************************************************************************/
 
 /**************************** Variables auxiliares ********************************/
-extern uint8_t system_aux_i, system_aux_j;	// Auxiliares de ateración
+extern uint8_t system_aux_i;	// Auxiliares de iteración
 /**********************************************************************************/
 
 /**********************************************************************************/
@@ -39,8 +39,6 @@ void adc_init(void)
 	memset((uint16_t *)(adc_buffer.mean), 0, 6 * sizeof(uint16_t));
 
 	adc_buffer.data_index = 0;
-
-	adc_buffer.buffer_write = 0;
 	/***********************************************************************************/
 
 	/***********************************************************************************/
@@ -63,17 +61,6 @@ void adc_init(void)
 
 	/***********************************************************************************/
 
-	/************************** Ticker envio de datos del adc **************************/
-	adc_ticker_send_data.ms_count = 0;
-	adc_ticker_send_data.ms_max = 255;
-	adc_ticker_send_data.calls = 0;
-	adc_ticker_send_data.priority = TICKER_LOW_PRIORITY;
-	adc_ticker_send_data.ticker_function = adc_send_data;
-	adc_ticker_send_data.active = TICKER_NO_ACTIVE;
-
-	ticker_new(&adc_ticker_send_data);
-	/***********************************************************************************/
-
 	/***********************************************************************************/
 	/***********************************************************************************/
 	/***********************************************************************************/
@@ -82,37 +69,6 @@ void adc_init(void)
 void adc_capture(void)
 {
 	HAL_ADC_Start_DMA(&hadc1, (uint32_t *)(&adc_buffer.data[adc_buffer.data_index]), 6);
-}
-
-void adc_set_buffer_send_data(system_ring_buffer_t *buffer, uint32_t ms)
-{
-	adc_buffer.buffer_write = buffer;
-
-	adc_ticker_send_data.ms_count = 0;
-	adc_ticker_send_data.active = TICKER_ACTIVE;
-
-	if (ms == 0)
-	{
-		adc_ticker_send_data.active = TICKER_NO_ACTIVE;
-	}
-
-	else if (ms < 100)
-	{
-		adc_ticker_send_data.ms_max = 100;
-	}
-
-	else
-	{
-		adc_ticker_send_data.ms_max = ms;
-	}
-}
-
-void adc_send_data(void)
-{
-	if (adc_buffer.buffer_write != 0)
-	{
-		system_write_cmd(adc_buffer.buffer_write, 0xC0, (uint8_t *)(adc_buffer.mean), 12);
-	}
 }
 /***********************************************************************************/
 /***********************************************************************************/
