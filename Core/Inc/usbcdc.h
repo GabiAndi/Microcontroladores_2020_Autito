@@ -48,15 +48,6 @@ void usbcdc_write_pending(void);
  *
  */
 void usbcdc_timeout_read(void);
-
-/*
- * Funcion que envia los datos del ADC a la PC
- *
- * Cada un cierto periodo de tiempo seteado con un comando,
- * se envian los datos almacenados del ADC via USB.
- *
- */
-void usbcdc_send_adc_data(void);
 /**********************************************************************************/
 /**********************************************************************************/
 /**********************************************************************************/

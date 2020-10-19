@@ -13,9 +13,7 @@ uint8_t system_flash_enabled;	// Seguridad de escritura de la flash
 
 /*********************************** Tickers **************************************/
 ticker_t system_ticker_flash_enable;
-
 ticker_t system_ticker_led_status;
-
 ticker_t system_ticker_adc_send_data;
 /**********************************************************************************/
 
@@ -144,7 +142,9 @@ void system_init(void)
 	/***********************************************************************************/
 	/***********************************************************************************/
 
-	system_flash_enabled = SYSTEM_FLASH_SAVE_DATA_ENABLED;	// Se habilita la flash para poder escribir
+	system_flash_enabled = SYSTEM_FLASH_SAVE_DATA_DISABLED;	// Se habilita la flash para poder escribir
+
+	system_usb_debug = SYSTEM_USB_DEBUG_OFF;	// La depuracion via USB inicia apagada
 
 	/***********************************************************************************/
 	/************************* Inicializacion de los bufferes **************************/
@@ -273,6 +273,9 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 		case 0:
 			if (cmd_manager->buffer_read->data[cmd_manager->buffer_read->read_index] == 'U')
 			{
+				cmd_manager->read_time_out->ms_count = 0;
+				cmd_manager->read_time_out->active = TICKER_ACTIVE;
+
 				cmd_manager->read_state = 1;
 			}
 
@@ -350,7 +353,7 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 		// Verificación de datos
 		case 7:
 			// Se espera que se termine de recibir todos los datos
-			if (cmd_manager->buffer_read->read_index == (cmd_manager->read_payload_init + cmd_manager->read_payload_length))
+			if (cmd_manager->buffer_read->read_index == (uint8_t)(cmd_manager->read_payload_init + cmd_manager->read_payload_length))
 			{
 				// Se comprueba la integridad de datos
 				if (system_check_xor((uint8_t *)(cmd_manager->buffer_read->data),
@@ -358,21 +361,30 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 						(uint8_t)(cmd_manager->read_payload_length + 7))
 						== cmd_manager->buffer_read->data[cmd_manager->buffer_read->read_index])
 				{
+					// Detengo el timeout
+					cmd_manager->read_time_out->active = TICKER_NO_ACTIVE;
+
+					// El estado se resetea
+					cmd_manager->read_state = 0;
+
+					// Se indica que se termino de analizar el paquete
+					result = 1;
+
 					// Analisis del comando recibido
-					switch (cmd_manager->buffer_read->data[cmd_manager->read_payload_init - 1])
+					switch (cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init - 1)])
 					{
 						/*
 						 * Comando que setea el modo de envio de datos a la PC
 						 *
 						 */
-						/*case 0xC0:
+						case 0xC0:
 							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == SYSTEM_ADC_SEND_DATA_ON)
 							{
-								system_ticker_adc_send_data.ms_max = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 1];
+								system_ticker_adc_send_data.ms_max = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 1)];
 
-								if (system_ticker_adc_send_data.ms_max < 150)
+								if (system_ticker_adc_send_data.ms_max < 50)
 								{
-									system_ticker_adc_send_data.ms_max = 150;
+									system_ticker_adc_send_data.ms_max = 50;
 								}
 
 								system_ticker_adc_send_data.active = TICKER_ACTIVE;
@@ -387,29 +399,29 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 								system_adc_buffer_send_data = 0;
 							}
 
-							break;*/
+							break;
 
 						/*
 						 * Comando que asigna el duty cycle al PWM
 						 *
 						 */
 						case 0xC1:
-							system_byte_converter.u8[0] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init];
-							system_byte_converter.u8[1] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 1];
-							system_byte_converter.u8[2] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 2];
-							system_byte_converter.u8[3] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 3];
+							system_byte_converter.u8[0] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init)];
+							system_byte_converter.u8[1] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 1)];
+							system_byte_converter.u8[2] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 2)];
+							system_byte_converter.u8[3] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 3)];
 
 							pwm_set_motor_der_speed(system_byte_converter.f);
 
-							system_byte_converter.u8[0] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 4];
-							system_byte_converter.u8[1] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 5];
-							system_byte_converter.u8[2] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 6];
-							system_byte_converter.u8[3] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 7];
+							system_byte_converter.u8[0] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 4)];
+							system_byte_converter.u8[1] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 5)];
+							system_byte_converter.u8[2] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 6)];
+							system_byte_converter.u8[3] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 7)];
 
 							pwm_set_motor_izq_speed(system_byte_converter.f);
 
-							system_byte_converter.u8[0] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 8];
-							system_byte_converter.u8[1] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 9];
+							system_byte_converter.u8[0] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 8)];
+							system_byte_converter.u8[1] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 9)];
 
 							if (system_byte_converter.u16[0] != 0)
 							{
@@ -426,11 +438,11 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 						 * Comando que asigna la frecuencia al PWM
 						 *
 						 */
-						/*case 0xC2:
+						case 0xC2:
 							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == 0xFF)
 							{
-								system_byte_converter.u8[0] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 1];
-								system_byte_converter.u8[1] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 2];
+								system_byte_converter.u8[0] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 1)];
+								system_byte_converter.u8[1] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 2)];
 
 								pwm_change_freq(system_byte_converter.u16[0]);
 							}
@@ -439,13 +451,13 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 
 							system_write_cmd(cmd_manager->buffer_write, 0xC2, &system_aux_ack, 1);
 
-							break;*/
+							break;
 
 						/*
 						 * Comando que asigna el SSID
 						 *
 						 */
-						/*case 0xD0:
+						case 0xD0:
 							system_aux_ack = 0xFF;
 
 							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] <= 30)
@@ -468,13 +480,13 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 
 							system_write_cmd(cmd_manager->buffer_write, 0xD0, &system_aux_ack, 1);
 
-							break;*/
+							break;
 
 						/*
 						 * Comando que asigna el PSW
 						 *
 						 */
-						/*case 0xD1:
+						case 0xD1:
 							system_aux_ack = 0xFF;
 
 							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] <= 30)
@@ -497,13 +509,13 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 
 							system_write_cmd(cmd_manager->buffer_write, 0xD1, &system_aux_ack, 1);
 
-							break;*/
+							break;
 
 						/*
 						 * Comando que asigna la IP del micro
 						 *
 						 */
-						/*case 0xD2:
+						case 0xD2:
 							system_aux_ack = 0xFF;
 
 							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] <= 20)
@@ -526,13 +538,13 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 
 							system_write_cmd(cmd_manager->buffer_write, 0xD2, &system_aux_ack, 1);
 
-							break;*/
+							break;
 
 						/*
 						 * Comando que asigna la IP de la PC
 						 *
 						 */
-						/*case 0xD3:	// Seteo de la ip del pc
+						case 0xD3:	// Seteo de la ip del pc
 							system_aux_ack = 0xFF;
 
 							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] <= 20)
@@ -555,13 +567,13 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 
 							system_write_cmd(cmd_manager->buffer_write, 0xD3, &system_aux_ack, 1);
 
-							break;*/
+							break;
 
 						/*
 						 * Comando que asigna el puerto UDP para la comunicacion
 						 *
 						 */
-						/*case 0xD4:
+						case 0xD4:
 							system_aux_ack = 0xFF;
 
 							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] <= 10)
@@ -584,13 +596,13 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 
 							system_write_cmd(cmd_manager->buffer_write, 0xD4, &system_aux_ack, 1);
 
-							break;*/
+							break;
 
 						/*
 						 * ¡¡CUIDADO ESTE COMANDO GRABA LOS DATOS DE LA RAM EN LA FLASH!!
 						 *
 						 */
-						/*case 0xD5:
+						case 0xD5:
 							system_aux_ack = 0xFF;
 
 							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == 0xFF)
@@ -603,7 +615,7 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 
 							system_write_cmd(cmd_manager->buffer_write, 0xD5, &system_aux_ack, 1);
 
-							break;*/
+							break;
 
 						/*
 						 * ALIVE
@@ -647,39 +659,39 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 						 * Comando para enviar comandos AT a la ESP
 						 *
 						 */
-						/*case 0xF2:
+						case 0xF2:
 							for (uint8_t i = 0 ; i < cmd_manager->read_payload_length ; i++)
 							{
 								system_buffer_write(&esp_buffer_write,
-										(uint8_t *)(&cmd_manager->buffer_read->data[cmd_manager->read_payload_init + i]), 1);
+										(uint8_t *)(&cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + i)]), 1);
 							}
 
 							system_buffer_write(&esp_buffer_write, (uint8_t *)("\r\n"), 2);
 
-							break;*/
+							break;
 
 						/*
 						 * Comando para enviar datos a la ESP
 						 *
 						 */
-						/*case 0xF3:
+						case 0xF3:
 							for (uint8_t i = 0 ; i < cmd_manager->read_payload_length ; i++)
 							{
 								system_buffer_write(&esp_buffer_write,
-										(uint8_t *)(&cmd_manager->buffer_read->data[cmd_manager->read_payload_init + i]), 1);
+										(uint8_t *)(&cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + i)]), 1);
 							}
 
-							break;*/
+							break;
 
 						/*
 						 * Se recibio un comando que no es identificable
 						 *
 						 */
-						/*default:
-							system_aux_ack = cmd_manager->buffer_read->data[cmd_manager->read_payload_init - 1];
+						default:
+							system_aux_ack = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init - 1)];
 
 							system_write_cmd(cmd_manager->buffer_write, 0xFF, &system_aux_ack, 1);
-							break;*/
+							break;
 					}
 				}
 
@@ -688,15 +700,6 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 				{
 
 				}
-
-				// Detengo el timeout
-				cmd_manager->read_time_out->active = TICKER_NO_ACTIVE;
-
-				// El estado se resetea
-				cmd_manager->read_state = 0;
-
-				// Se indica que se termino de analizar el paquete
-				result = 1;
 			}
 
 			break;
@@ -786,7 +789,7 @@ void system_adc_send_data(void)
 {
 	if (system_adc_buffer_send_data != 0)
 	{
-		system_write_cmd(system_adc_buffer_send_data, 0xC0, &((uint8_t *)(adc_buffer.mean))[0], 12);
+		system_write_cmd(system_adc_buffer_send_data, 0xC0, (uint8_t *)(adc_buffer.mean), 12);
 	}
 }
 /**********************************************************************************/

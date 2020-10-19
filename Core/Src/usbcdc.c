@@ -6,15 +6,11 @@
 
 /*********************************** Tickers **************************************/
 ticker_t usbcdc_ticker_read_time_out;
-
-ticker_t usbcdc_ticker_send_adc_data;
 /**********************************************************************************/
 
 /***************************** Bufferes de datos **********************************/
 system_ring_buffer_t usbcdc_buffer_read;
 system_ring_buffer_t usbcdc_buffer_write;
-
-extern adc_buffer_t adc_buffer;
 /**********************************************************************************/
 
 /*************************** Manejador de comandos ********************************/
@@ -83,17 +79,6 @@ void usbcdc_init(void)
 	ticker_new(&usbcdc_ticker_read_time_out);
 	/***********************************************************************************/
 
-	/*********************** Ticker para envio de datos del adc ************************/
-	usbcdc_ticker_send_adc_data.ms_count = 0;
-	usbcdc_ticker_send_adc_data.ms_max = 500;
-	usbcdc_ticker_send_adc_data.calls = 0;
-	usbcdc_ticker_send_adc_data.priority = TICKER_LOW_PRIORITY;
-	usbcdc_ticker_send_adc_data.ticker_function = usbcdc_send_adc_data;
-	usbcdc_ticker_send_adc_data.active = TICKER_NO_ACTIVE;
-
-	ticker_new(&usbcdc_ticker_send_adc_data);
-	/***********************************************************************************/
-
 	/***********************************************************************************/
 	/***********************************************************************************/
 	/***********************************************************************************/
@@ -125,50 +110,6 @@ void usbcdc_timeout_read(void)
 	usbcdc_ticker_read_time_out.active = TICKER_NO_ACTIVE;
 
 	usbcdc_cmd_manager.read_state = 0;
-}
-
-void usbcdc_send_adc_data(void)
-{
-	// Calculo la media de los datos almacenados en el buffer
-	/*for (uint8_t i = 0 ; i < 6 ; i++)
-	{
-		adc_buffer.mean[i] = 0;
-
-		for (uint8_t j = 0 ; j < ADC_BUFFER_LENGTH ; j += ADC_MEAN_STEP)
-		{
-			adc_buffer.mean[i] += adc_buffer.data[j][i];
-		}
-
-		adc_buffer.mean[i] = (uint16_t)(adc_buffer.mean[i] / (ADC_BUFFER_LENGTH / ADC_MEAN_STEP));
-	}
-
-	uint8_t init_index;
-
-	usbcdc_write_buffer_write((uint8_t *)("UNER"), 4);
-
-	ack = 13;
-	usbcdc_write_buffer_write(&ack, 1);
-
-	usbcdc_write_buffer_write((uint8_t *)(":"), 1);
-
-	ack = 0xC0;
-	usbcdc_write_buffer_write(&ack, 1);
-
-	init_index = usbcdc_buffer_write.write_index;
-
-	usbcdc_write_buffer_write((uint8_t *)(&adc_buffer.send_esp), 1);
-
-	for (uint8_t i = 0 ; i < 6 ; i++)
-	{
-		byte_translate.u16[0] = adc_buffer.mean[i];
-
-		usbcdc_write_buffer_write((uint8_t *)(&byte_translate.u8[0]), 1);
-		usbcdc_write_buffer_write((uint8_t *)(&byte_translate.u8[1]), 1);
-	}
-
-	uint8_t checksum = check_xor(ack, (uint8_t *)(&usbcdc_buffer_write.data), init_index, 13);
-
-	usbcdc_write_buffer_write(&checksum, 1);*/
 }
 /**********************************************************************************/
 /**********************************************************************************/

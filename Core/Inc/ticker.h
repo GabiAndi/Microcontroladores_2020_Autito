@@ -42,7 +42,7 @@ typedef void(*ticker_ptrfun)(void);
 /******************************* Estructura ticker ********************************/
 typedef struct
 {
-	volatile uint32_t ms_max;
+	uint32_t ms_max;
 	volatile uint32_t ms_count;
 
 	volatile uint16_t calls;

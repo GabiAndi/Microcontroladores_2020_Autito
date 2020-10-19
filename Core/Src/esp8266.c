@@ -746,7 +746,7 @@ uint8_t esp_at_cmp(uint8_t *at, uint8_t at_init, uint8_t at_end, uint8_t *at_cmp
 	uint8_t i = at_init;
 	uint8_t j = 0;
 
-	if (((at_init > at_end) && (at_cmp_length < (256 - at_init + at_end + 1))) || ((at_cmp_length < (at_end + 1 - at_init))))
+	if (((at_init > at_end) && (at_cmp_length < (uint8_t)(256 - at_init + at_end + 1))) || ((at_cmp_length < (uint8_t)(at_end + 1 - at_init))))
 	{
 		return 0;
 	}
@@ -798,8 +798,6 @@ void esp_connect_to_ap(void)
 				if (esp_manager.status == ESP_STATUS_INIT)
 				{
 					esp_manager.auto_connection = 2;
-
-					system_led_set_status(SYSTEM_LED_INIT);
 				}
 
 				break;
@@ -874,8 +872,6 @@ void esp_connect_to_ap(void)
 					esp_ticker_connect_to_ap.active = TICKER_NO_ACTIVE;
 
 					esp_manager.auto_connection = 0;
-
-					system_led_set_status(SYSTEM_LED_OK);
 				}
 
 				break;
@@ -948,6 +944,22 @@ void esp_guardian_status(void)
 			esp_manager.error = ESP_ERROR_OK;
 
 			break;
+	}
+
+	// Parpadeo del LED
+	if (esp_manager.status == ESP_STATUS_NO_INIT)
+	{
+		system_led_set_status(SYSTEM_LED_FAIL);
+	}
+
+	else if (esp_manager.udp != ESP_UDP_INIT)
+	{
+		system_led_set_status(SYSTEM_LED_INIT);
+	}
+
+	else if ((esp_manager.error == ESP_ERROR_OK) && (esp_manager.udp == ESP_UDP_INIT))
+	{
+		system_led_set_status(SYSTEM_LED_OK);
 	}
 }
 /**********************************************************************************/

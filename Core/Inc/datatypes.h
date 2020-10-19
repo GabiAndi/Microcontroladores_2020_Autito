@@ -30,7 +30,7 @@
 /******************************** Datos del ADC ***********************************/
 typedef struct
 {
-	volatile uint16_t data[50][6];
+	volatile uint16_t data[ADC_BUFFER_LENGTH][6];
 
 	volatile uint8_t data_index;
 
