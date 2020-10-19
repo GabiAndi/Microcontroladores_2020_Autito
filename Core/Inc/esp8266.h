@@ -210,6 +210,16 @@ void esp_hard_reset(void);
 void esp_hard_reset_stop(void);
 
 /*
+ * Funcion que inicia la recepción de datos de la ESP
+ *
+ * Esta funcion se llama para activar la recepción de datos despues
+ * de un cierto periodo de tiempo con el fin de ignorar los datos que
+ * envia la ESP tras un reinicio.
+ *
+ */
+void esp_enable_usart_receibe(void);
+
+/*
  * Funcion de guardia de la ESP
  *
  * Esta funcion se encarga de capturar los eventos de la ESP y accionar a ellos.

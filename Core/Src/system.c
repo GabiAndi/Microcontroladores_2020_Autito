@@ -365,7 +365,7 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 						 * Comando que setea el modo de envio de datos a la PC
 						 *
 						 */
-						case 0xC0:
+						/*case 0xC0:
 							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == SYSTEM_ADC_SEND_DATA_ON)
 							{
 								system_ticker_adc_send_data.ms_max = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 1];
@@ -387,7 +387,7 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 								system_adc_buffer_send_data = 0;
 							}
 
-							break;
+							break;*/
 
 						/*
 						 * Comando que asigna el duty cycle al PWM
@@ -426,7 +426,7 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 						 * Comando que asigna la frecuencia al PWM
 						 *
 						 */
-						case 0xC2:
+						/*case 0xC2:
 							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == 0xFF)
 							{
 								system_byte_converter.u8[0] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init + 1];
@@ -439,13 +439,13 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 
 							system_write_cmd(cmd_manager->buffer_write, 0xC2, &system_aux_ack, 1);
 
-							break;
+							break;*/
 
 						/*
 						 * Comando que asigna el SSID
 						 *
 						 */
-						case 0xD0:
+						/*case 0xD0:
 							system_aux_ack = 0xFF;
 
 							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] <= 30)
@@ -468,13 +468,13 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 
 							system_write_cmd(cmd_manager->buffer_write, 0xD0, &system_aux_ack, 1);
 
-							break;
+							break;*/
 
 						/*
 						 * Comando que asigna el PSW
 						 *
 						 */
-						case 0xD1:
+						/*case 0xD1:
 							system_aux_ack = 0xFF;
 
 							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] <= 30)
@@ -497,13 +497,13 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 
 							system_write_cmd(cmd_manager->buffer_write, 0xD1, &system_aux_ack, 1);
 
-							break;
+							break;*/
 
 						/*
 						 * Comando que asigna la IP del micro
 						 *
 						 */
-						case 0xD2:
+						/*case 0xD2:
 							system_aux_ack = 0xFF;
 
 							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] <= 20)
@@ -526,13 +526,13 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 
 							system_write_cmd(cmd_manager->buffer_write, 0xD2, &system_aux_ack, 1);
 
-							break;
+							break;*/
 
 						/*
 						 * Comando que asigna la IP de la PC
 						 *
 						 */
-						case 0xD3:	// Seteo de la ip del pc
+						/*case 0xD3:	// Seteo de la ip del pc
 							system_aux_ack = 0xFF;
 
 							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] <= 20)
@@ -555,13 +555,13 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 
 							system_write_cmd(cmd_manager->buffer_write, 0xD3, &system_aux_ack, 1);
 
-							break;
+							break;*/
 
 						/*
 						 * Comando que asigna el puerto UDP para la comunicacion
 						 *
 						 */
-						case 0xD4:
+						/*case 0xD4:
 							system_aux_ack = 0xFF;
 
 							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] <= 10)
@@ -584,13 +584,13 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 
 							system_write_cmd(cmd_manager->buffer_write, 0xD4, &system_aux_ack, 1);
 
-							break;
+							break;*/
 
 						/*
 						 * ¡¡CUIDADO ESTE COMANDO GRABA LOS DATOS DE LA RAM EN LA FLASH!!
 						 *
 						 */
-						case 0xD5:
+						/*case 0xD5:
 							system_aux_ack = 0xFF;
 
 							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == 0xFF)
@@ -603,7 +603,7 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 
 							system_write_cmd(cmd_manager->buffer_write, 0xD5, &system_aux_ack, 1);
 
-							break;
+							break;*/
 
 						/*
 						 * ALIVE
@@ -647,7 +647,7 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 						 * Comando para enviar comandos AT a la ESP
 						 *
 						 */
-						case 0xF2:
+						/*case 0xF2:
 							for (uint8_t i = 0 ; i < cmd_manager->read_payload_length ; i++)
 							{
 								system_buffer_write(&esp_buffer_write,
@@ -656,30 +656,30 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 
 							system_buffer_write(&esp_buffer_write, (uint8_t *)("\r\n"), 2);
 
-							break;
+							break;*/
 
 						/*
 						 * Comando para enviar datos a la ESP
 						 *
 						 */
-						case 0xF3:
+						/*case 0xF3:
 							for (uint8_t i = 0 ; i < cmd_manager->read_payload_length ; i++)
 							{
 								system_buffer_write(&esp_buffer_write,
 										(uint8_t *)(&cmd_manager->buffer_read->data[cmd_manager->read_payload_init + i]), 1);
 							}
 
-							break;
+							break;*/
 
 						/*
 						 * Se recibio un comando que no es identificable
 						 *
 						 */
-						default:
+						/*default:
 							system_aux_ack = cmd_manager->buffer_read->data[cmd_manager->read_payload_init - 1];
 
 							system_write_cmd(cmd_manager->buffer_write, 0xFF, &system_aux_ack, 1);
-							break;
+							break;*/
 					}
 				}
 

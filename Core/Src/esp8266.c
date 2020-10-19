@@ -14,6 +14,7 @@ ticker_t esp_ticker_write_time_out;
 
 ticker_t esp_ticker_connect_to_ap;
 ticker_t esp_ticker_hard_reset_stop;
+ticker_t esp_ticker_enable_usart_receibe;
 ticker_t esp_ticker_send_adc_sensor_data;
 /**********************************************************************************/
 
@@ -159,6 +160,17 @@ void esp_init(void)
 	esp_ticker_hard_reset_stop.active = TICKER_NO_ACTIVE;
 
 	ticker_new(&esp_ticker_hard_reset_stop);
+	/***********************************************************************************/
+
+	/************************** Ticker de habilitación USART ***************************/
+	esp_ticker_enable_usart_receibe.ms_count = 0;
+	esp_ticker_enable_usart_receibe.ms_max = 1500;
+	esp_ticker_enable_usart_receibe.calls = 0;
+	esp_ticker_enable_usart_receibe.priority = TICKER_LOW_PRIORITY;
+	esp_ticker_enable_usart_receibe.ticker_function = esp_enable_usart_receibe;
+	esp_ticker_enable_usart_receibe.active = TICKER_NO_ACTIVE;
+
+	ticker_new(&esp_ticker_enable_usart_receibe);
 	/***********************************************************************************/
 
 	/***********************************************************************************/
@@ -739,7 +751,7 @@ uint8_t esp_at_cmp(uint8_t *at, uint8_t at_init, uint8_t at_end, uint8_t *at_cmp
 		return 0;
 	}
 
-	while (i != (at_end + 1))
+	while (i != (uint8_t)(at_end + 1))
 	{
 		if (at[i] != at_cmp[j])
 		{
@@ -911,6 +923,14 @@ void esp_hard_reset_stop(void)
 	HAL_GPIO_WritePin(ESP_RST_GPIO_Port, ESP_RST_Pin, GPIO_PIN_SET);
 
 	esp_ticker_hard_reset_stop.active = TICKER_NO_ACTIVE;
+
+	esp_ticker_enable_usart_receibe.ms_count = 0;
+	esp_ticker_enable_usart_receibe.active = TICKER_ACTIVE;
+}
+
+void esp_enable_usart_receibe(void)
+{
+	esp_ticker_enable_usart_receibe.active = TICKER_NO_ACTIVE;
 
 	esp_ticker_connect_to_ap.ms_count = 0;
 	esp_ticker_connect_to_ap.active = TICKER_ACTIVE;
