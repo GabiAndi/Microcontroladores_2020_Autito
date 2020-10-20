@@ -406,7 +406,7 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 						 *
 						 */
 						case 0xC1:
-							system_byte_converter.u8[0] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init)];
+							system_byte_converter.u8[0] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init];
 							system_byte_converter.u8[1] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 1)];
 							system_byte_converter.u8[2] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 2)];
 							system_byte_converter.u8[3] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 3)];

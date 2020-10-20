@@ -18,10 +18,6 @@ extern ADC_HandleTypeDef hadc1;
 adc_buffer_t adc_buffer;
 /**********************************************************************************/
 
-/**************************** Variables auxiliares ********************************/
-extern uint8_t system_aux_i;	// Auxiliares de iteración
-/**********************************************************************************/
-
 /**********************************************************************************/
 /**********************************************************************************/
 /**********************************************************************************/
@@ -79,10 +75,9 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
 	if (hadc->Instance == ADC1)
 	{
-		for (system_aux_i = 0 ; system_aux_i < 6 ; system_aux_i++)
+		for (uint8_t i = 0 ; i < 6 ; i++)
 		{
-			adc_buffer.mean[system_aux_i] =
-					(uint16_t)((adc_buffer.mean[system_aux_i] + adc_buffer.data[adc_buffer.data_index][system_aux_i]) / 2.0);
+			adc_buffer.mean[i] = ((adc_buffer.mean[i] + adc_buffer.data[adc_buffer.data_index][i]) / 2.0);
 		}
 
 		adc_buffer.data_index++;
