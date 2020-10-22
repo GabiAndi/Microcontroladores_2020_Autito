@@ -15,14 +15,17 @@ uint8_t system_flash_enabled;	// Seguridad de escritura de la flash
 ticker_t system_ticker_flash_enable;
 ticker_t system_ticker_led_status;
 ticker_t system_ticker_adc_send_data;
+ticker_t system_ticker_error_send_data;
 /**********************************************************************************/
 
 /***************************** Bufferes de datos **********************************/
 extern system_ring_buffer_t esp_buffer_write;	// Buffer de la ESP
 
-extern adc_buffer_t adc_buffer;
+extern adc_buffer_t adc_buffer;	// Buffer de captura del ADC
 
-system_ring_buffer_t *system_adc_buffer_send_data;
+system_ring_buffer_t *system_adc_buffer_send_data;	// Buffer de envio de datos del ADC
+
+system_ring_buffer_t *system_error_buffer_send_data;	// Buffer de envio de datos del error
 /**********************************************************************************/
 
 /***************************** Depuracion via USB *********************************/
@@ -31,6 +34,10 @@ uint8_t system_usb_debug;
 
 /**************************** Conversion de datos *********************************/
 system_byte_converter_u system_byte_converter;
+/**********************************************************************************/
+
+/***************************** Control del autito *********************************/
+system_control_t system_control;
 /**********************************************************************************/
 
 /**************************** Variables auxiliares ********************************/
@@ -147,6 +154,21 @@ void system_init(void)
 	system_usb_debug = SYSTEM_USB_DEBUG_OFF;	// La depuracion via USB inicia apagada
 
 	/***********************************************************************************/
+	/********************** Inicializacion de los valores del PID **********************/
+	/***********************************************************************************/
+	system_control.state = SYSTEM_CONTROL_STATE_OFF;
+
+	system_control.vel_mot_der = 0.0;
+	system_control.vel_mot_izq = 0.0;
+
+	system_ram_user.kp = system_flash_user.kp;
+	system_ram_user.kd = system_flash_user.kd;
+	system_ram_user.ki = system_flash_user.ki;
+	/***********************************************************************************/
+	/***********************************************************************************/
+	/***********************************************************************************/
+
+	/***********************************************************************************/
 	/************************* Inicializacion de los bufferes **************************/
 	/***********************************************************************************/
 	system_adc_buffer_send_data = 0;
@@ -191,6 +213,17 @@ void system_init(void)
 	system_ticker_adc_send_data.active = TICKER_NO_ACTIVE;
 
 	ticker_new(&system_ticker_adc_send_data);
+	/***********************************************************************************/
+
+	/************************* Ticker envio de datos del error *************************/
+	system_ticker_error_send_data.ms_count = 0;
+	system_ticker_error_send_data.ms_max = 255;
+	system_ticker_error_send_data.calls = 0;
+	system_ticker_error_send_data.priority = TICKER_LOW_PRIORITY;
+	system_ticker_error_send_data.ticker_function = system_error_send_data;
+	system_ticker_error_send_data.active = TICKER_NO_ACTIVE;
+
+	ticker_new(&system_ticker_error_send_data);
 	/***********************************************************************************/
 
 	/***********************************************************************************/
@@ -374,11 +407,129 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 					switch (cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init - 1)])
 					{
 						/*
-						 * Comando que setea el modo de envio de datos a la PC
+						 * Comando para leer o setear la constante KP
+						 *
+						 */
+						case 0xA0:
+							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == 0xFF)
+							{
+								system_aux_ack = 0xFF;
+
+								system_byte_converter.u8[1] = system_aux_ack;
+
+								system_byte_converter.u8[2] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 1)];
+								system_byte_converter.u8[3] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 2)];
+
+								system_ram_user.kp = system_byte_converter.u16[1];
+							}
+
+							else if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == 0x00)
+							{
+								system_aux_ack = 0x00;
+
+								system_byte_converter.u8[1] = system_aux_ack;
+
+								system_byte_converter.u16[1] = system_ram_user.kp;
+							}
+
+							system_write_cmd(cmd_manager->buffer_write, 0xA0, &system_byte_converter.u8[1], 3);
+
+							break;
+
+						/*
+						 * Comando para leer o setear la constante KD
+						 *
+						 */
+						case 0xA1:
+							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == 0xFF)
+							{
+								system_aux_ack = 0xFF;
+
+								system_byte_converter.u8[1] = system_aux_ack;
+
+								system_byte_converter.u8[2] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 1)];
+								system_byte_converter.u8[3] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 2)];
+
+								system_ram_user.kd = system_byte_converter.u16[1];
+							}
+
+							else if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == 0x00)
+							{
+								system_aux_ack = 0x00;
+
+								system_byte_converter.u8[1] = system_aux_ack;
+
+								system_byte_converter.u16[1] = system_ram_user.kd;
+							}
+
+							system_write_cmd(cmd_manager->buffer_write, 0xA1, &system_byte_converter.u8[1], 3);
+
+							break;
+
+						/*
+						 * Comando para leer o setear la constante KI
+						 *
+						 */
+						case 0xA2:
+							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == 0xFF)
+							{
+								system_aux_ack = 0xFF;
+
+								system_byte_converter.u8[1] = system_aux_ack;
+
+								system_byte_converter.u8[2] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 1)];
+								system_byte_converter.u8[3] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 2)];
+
+								system_ram_user.ki = system_byte_converter.u16[1];
+							}
+
+							else if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == 0x00)
+							{
+								system_aux_ack = 0x00;
+
+								system_byte_converter.u8[1] = system_aux_ack;
+
+								system_byte_converter.u16[1] = system_ram_user.ki;
+							}
+
+							system_write_cmd(cmd_manager->buffer_write, 0xA2, &system_byte_converter.u8[1], 3);
+
+							break;
+
+						/*
+						 * Comando que setea el modo de envio de datos del error a la PC
+						 *
+						 */
+						case 0xA3:
+							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == 0xFF)
+							{
+								system_ticker_error_send_data.ms_max = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 1)];
+
+								if (system_ticker_error_send_data.ms_max < 50)
+								{
+									system_ticker_error_send_data.ms_max = 50;
+								}
+
+								system_ticker_error_send_data.active = TICKER_ACTIVE;
+
+								system_error_buffer_send_data = cmd_manager->buffer_write;
+							}
+
+							else if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == 0x00)
+							{
+								system_ticker_error_send_data.active = TICKER_NO_ACTIVE;
+
+								system_adc_buffer_send_data = 0;
+							}
+
+							break;
+
+						/*
+						 * Comando que setea el modo de envio de datos del puerto ADC a la PC
 						 *
 						 */
 						case 0xC0:
-							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == SYSTEM_ADC_SEND_DATA_ON)
+							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == 0xFF)
 							{
 								system_ticker_adc_send_data.ms_max = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 1)];
 
@@ -392,7 +543,7 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 								system_adc_buffer_send_data = cmd_manager->buffer_write;
 							}
 
-							else if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == SYSTEM_ADC_SEND_DATA_OFF)
+							else if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == 0x00)
 							{
 								system_ticker_adc_send_data.active = TICKER_NO_ACTIVE;
 
@@ -790,6 +941,29 @@ void system_adc_send_data(void)
 	if (system_adc_buffer_send_data != 0)
 	{
 		system_write_cmd(system_adc_buffer_send_data, 0xC0, (uint8_t *)(adc_buffer.mean), 12);
+	}
+}
+
+void system_pid_control(void)
+{
+	if (system_control.state == SYSTEM_CONTROL_STATE_ON)
+	{
+		// Algoritmo de PID
+
+
+		// Se le da la velocidad a los motores
+		pwm_set_motor_der_speed(system_control.vel_mot_der);
+		pwm_set_motor_izq_speed(system_control.vel_mot_izq);
+	}
+}
+
+void system_error_send_data(void)
+{
+	if (system_error_buffer_send_data != 0)
+	{
+		system_byte_converter.u16[0] = system_control.error;
+
+		system_write_cmd(system_error_buffer_send_data, 0xA3, &system_byte_converter.u8[0], 2);
 	}
 }
 /**********************************************************************************/

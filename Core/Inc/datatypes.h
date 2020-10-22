@@ -56,7 +56,11 @@ typedef struct
 	uint8_t port[10];
 	uint8_t port_length;
 
-	uint8_t padding[1024 - 31 - 31 - 21 - 21 - 11 - 1];
+	uint16_t kp;
+	uint16_t kd;
+	uint16_t ki;
+
+	uint8_t padding[1024 - 31 - 31 - 21 - 21 - 11 - 1 - 2 - 2 - 2];
 
 	uint8_t checksum;
 }__attribute__ ((packed)) system_flash_data_t;

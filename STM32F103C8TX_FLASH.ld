@@ -147,8 +147,10 @@ SECTIONS
   .user_data_flash :
   {
     . = ALIGN(4);
+    
     KEEP(*(.user_data_flash))
     KEEP(*(.user_data_flash*))
+    
     . = ALIGN(4);
   } >USER_FLASH
 
