@@ -29,6 +29,11 @@
 #define SYSTEM_LED_GPIO_Port					GPIOC
 /**********************************************************************************/
 
+/******************************** Pines del PID ***********************************/
+#define SYSTEM_PID_Pin 							GPIO_PIN_8
+#define SYSTEM_PID_GPIO_Port					GPIOA
+/**********************************************************************************/
+
 /******************************** Led de estado ***********************************/
 #define SYSTEM_LED_FAIL							50
 #define SYSTEM_LED_INIT							500
@@ -46,8 +51,18 @@
 /**********************************************************************************/
 
 /****************************** Estado del control ********************************/
-#define SYSTEM_CONTROL_STATE_OFF				0
-#define SYSTEM_CONTROL_STATE_ON					1
+#define SYSTEM_CONTROL_STATE_OFF				0x00
+#define SYSTEM_CONTROL_STATE_ON					0xFF
+/**********************************************************************************/
+
+/************************************* PID ****************************************/
+#define SYSTEM_CONTROL_ERROR_MAX				1600
+#define SYSTEM_CONTROL_ERROR_MIN				-1600
+
+#define SYSTEM_CONTROL_BASE_SPEED				25.0F
+#define SYSTEM_CONTROL_MAX_SPEED				80.0F
+
+#define SYSTEM_CONTROL_RES_MS					50
 /**********************************************************************************/
 
 /**********************************************************************************/
@@ -66,7 +81,12 @@ typedef struct
 	float vel_mot_der;
 	float vel_mot_izq;
 
-	uint16_t error;
+	int16_t error;
+	int16_t error_vel;
+
+	float p;
+	float i;
+	float d;
 }system_control_t;
 /**********************************************************************************/
 
@@ -188,6 +208,12 @@ void system_pid_control(void);
  *
  */
 void system_error_send_data(void);
+
+/*
+ * Funcion que activa o desactida el PID
+ *
+ */
+void system_control_state_button(void);
 /**********************************************************************************/
 /**********************************************************************************/
 /**********************************************************************************/

@@ -16,6 +16,8 @@ ticker_t system_ticker_flash_enable;
 ticker_t system_ticker_led_status;
 ticker_t system_ticker_adc_send_data;
 ticker_t system_ticker_error_send_data;
+ticker_t system_ticker_control_set;
+ticker_t system_ticker_pid_control;
 /**********************************************************************************/
 
 /***************************** Bufferes de datos **********************************/
@@ -26,6 +28,8 @@ extern adc_buffer_t adc_buffer;	// Buffer de captura del ADC
 system_ring_buffer_t *system_adc_buffer_send_data;	// Buffer de envio de datos del ADC
 
 system_ring_buffer_t *system_error_buffer_send_data;	// Buffer de envio de datos del error
+
+system_ring_buffer_t *system_control_buffer_send_data;	// Buffer de envio de datos del control
 /**********************************************************************************/
 
 /***************************** Depuracion via USB *********************************/
@@ -172,6 +176,8 @@ void system_init(void)
 	/************************* Inicializacion de los bufferes **************************/
 	/***********************************************************************************/
 	system_adc_buffer_send_data = 0;
+	system_error_buffer_send_data = 0;
+	system_control_buffer_send_data = 0;
 	/***********************************************************************************/
 	/***********************************************************************************/
 	/***********************************************************************************/
@@ -226,6 +232,28 @@ void system_init(void)
 	ticker_new(&system_ticker_error_send_data);
 	/***********************************************************************************/
 
+	/********************* Ticker para activar o desactivar el PID *********************/
+	system_ticker_control_set.ms_count = 0;
+	system_ticker_control_set.ms_max = 1;
+	system_ticker_control_set.calls = 0;
+	system_ticker_control_set.priority = TICKER_LOW_PRIORITY;
+	system_ticker_control_set.ticker_function = system_control_state_button;
+	system_ticker_control_set.active = TICKER_ACTIVE;
+
+	ticker_new(&system_ticker_control_set);
+	/***********************************************************************************/
+
+	/********************************** Ticker del PID *********************************/
+	system_ticker_pid_control.ms_count = 0;
+	system_ticker_pid_control.ms_max = SYSTEM_CONTROL_RES_MS;
+	system_ticker_pid_control.calls = 0;
+	system_ticker_pid_control.priority = TICKER_LOW_PRIORITY;
+	system_ticker_pid_control.ticker_function = system_pid_control;
+	system_ticker_pid_control.active = TICKER_ACTIVE;
+
+	ticker_new(&system_ticker_pid_control);
+	/***********************************************************************************/
+
 	/***********************************************************************************/
 	/***********************************************************************************/
 	/***********************************************************************************/
@@ -242,12 +270,20 @@ void system_init(void)
 
 void system_led_blink(void)
 {
+	if (system_control.state == SYSTEM_CONTROL_STATE_ON)
+	{
+		system_ticker_led_status.ms_max = 50;
+	}
+
 	HAL_GPIO_TogglePin(SYSTEM_LED_GPIO_Port, SYSTEM_LED_Pin);
 }
 
 void system_led_set_status(uint16_t status)
 {
-	system_ticker_led_status.ms_max = status;
+	if (system_control.state == SYSTEM_CONTROL_STATE_OFF)
+	{
+		system_ticker_led_status.ms_max = status;
+	}
 }
 
 void system_buffer_write(system_ring_buffer_t *buffer, uint8_t *data, uint8_t length)
@@ -505,9 +541,9 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 							{
 								system_ticker_error_send_data.ms_max = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 1)];
 
-								if (system_ticker_error_send_data.ms_max < 50)
+								if (system_ticker_error_send_data.ms_max < 150)
 								{
-									system_ticker_error_send_data.ms_max = 50;
+									system_ticker_error_send_data.ms_max = 150;
 								}
 
 								system_ticker_error_send_data.active = TICKER_ACTIVE;
@@ -519,8 +555,31 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 							{
 								system_ticker_error_send_data.active = TICKER_NO_ACTIVE;
 
-								system_adc_buffer_send_data = 0;
+								system_error_buffer_send_data = 0;
 							}
+
+							break;
+
+						/*
+						 * Comando que activa o desactiva el modo de control automatico
+						 *
+						 */
+						case 0xAA:
+							if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == 0xFF)
+							{
+								system_control.state = SYSTEM_CONTROL_STATE_ON;
+
+								system_control_buffer_send_data = cmd_manager->buffer_write;
+							}
+
+							else if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == 0x00)
+							{
+								system_control.state = SYSTEM_CONTROL_STATE_OFF;
+
+								system_control_buffer_send_data = 0;
+							}
+
+							system_write_cmd(cmd_manager->buffer_write, 0xAA, (uint8_t *)(&cmd_manager->buffer_read->data[cmd_manager->read_payload_init]), 1);
 
 							break;
 
@@ -533,9 +592,9 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 							{
 								system_ticker_adc_send_data.ms_max = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 1)];
 
-								if (system_ticker_adc_send_data.ms_max < 50)
+								if (system_ticker_adc_send_data.ms_max < 150)
 								{
-									system_ticker_adc_send_data.ms_max = 50;
+									system_ticker_adc_send_data.ms_max = 150;
 								}
 
 								system_ticker_adc_send_data.active = TICKER_ACTIVE;
@@ -946,14 +1005,74 @@ void system_adc_send_data(void)
 
 void system_pid_control(void)
 {
+	// Distancia optima a la pared 1500
+	system_control.error_vel = system_control.error;
+	system_control.error = 2000 - adc_buffer.mean[5];
+	system_control.error_vel = system_control.error_vel - system_control.error;
+
 	if (system_control.state == SYSTEM_CONTROL_STATE_ON)
 	{
 		// Algoritmo de PID
+		system_control.p = system_control.error / (SYSTEM_CONTROL_ERROR_MIN * 1.0) * system_ram_user.kp;
+		system_control.d = system_control.error_vel / (SYSTEM_CONTROL_ERROR_MAX * 1.0) * system_ram_user.kd;
+		system_control.i += system_control.error / (SYSTEM_CONTROL_ERROR_MAX * 100.0) * system_ram_user.ki;
 
+		// Limites de los valores
+		if (system_control.p > 100.0)
+		{
+			system_control.p = 100.0;
+		}
+
+		if (system_control.d > 100.0)
+		{
+			system_control.d = 100.0;
+		}
+
+		if (system_control.i > 100.0)
+		{
+			system_control.i = 100.0;
+		}
+
+		// Motor de la derecha
+		system_control.vel_mot_der = SYSTEM_CONTROL_BASE_SPEED + system_control.p + system_control.i + system_control.d;
+
+		// Motor de la izquierda
+		system_control.vel_mot_izq = -SYSTEM_CONTROL_BASE_SPEED + system_control.p + system_control.i + system_control.d;
+
+		// Limite de valores de velocidad
+		if (system_control.vel_mot_der > SYSTEM_CONTROL_MAX_SPEED)
+		{
+			system_control.vel_mot_der = SYSTEM_CONTROL_MAX_SPEED;
+		}
+
+		else if (system_control.vel_mot_der < -SYSTEM_CONTROL_MAX_SPEED)
+		{
+			system_control.vel_mot_der = -SYSTEM_CONTROL_MAX_SPEED;
+		}
+
+		if (system_control.vel_mot_izq > SYSTEM_CONTROL_MAX_SPEED)
+		{
+			system_control.vel_mot_izq = SYSTEM_CONTROL_MAX_SPEED;
+		}
+
+		else if (system_control.vel_mot_izq < -SYSTEM_CONTROL_MAX_SPEED)
+		{
+			system_control.vel_mot_izq = -SYSTEM_CONTROL_MAX_SPEED;
+		}
 
 		// Se le da la velocidad a los motores
 		pwm_set_motor_der_speed(system_control.vel_mot_der);
 		pwm_set_motor_izq_speed(system_control.vel_mot_izq);
+
+		// Se da un timeout por si paso algo
+		pwm_set_stop_motor(200);
+	}
+
+	else
+	{
+		system_control.p = 0.0;
+		system_control.d = 0.0;
+		system_control.i = 0.0;
 	}
 }
 
@@ -961,9 +1080,34 @@ void system_error_send_data(void)
 {
 	if (system_error_buffer_send_data != 0)
 	{
-		system_byte_converter.u16[0] = system_control.error;
+		system_byte_converter.i16[0] = system_control.error;
 
 		system_write_cmd(system_error_buffer_send_data, 0xA3, &system_byte_converter.u8[0], 2);
+	}
+}
+
+void system_control_state_button(void)
+{
+	system_ticker_control_set.ms_max = 1;
+
+	if (HAL_GPIO_ReadPin(SYSTEM_PID_GPIO_Port, SYSTEM_PID_Pin) == GPIO_PIN_RESET)
+	{
+		system_ticker_control_set.ms_max = 500;	// Antibounce
+
+		if (system_control.state == SYSTEM_CONTROL_STATE_OFF)
+		{
+			system_control.state = SYSTEM_CONTROL_STATE_ON;
+		}
+
+		else
+		{
+			system_control.state = SYSTEM_CONTROL_STATE_OFF;
+		}
+
+		if (system_control_buffer_send_data != 0)
+		{
+			system_write_cmd(system_control_buffer_send_data, 0xAA, &system_control.state, 1);
+		}
 	}
 }
 /**********************************************************************************/
