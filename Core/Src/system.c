@@ -162,8 +162,8 @@ void system_init(void)
 	/***********************************************************************************/
 	system_control.state = SYSTEM_CONTROL_STATE_OFF;
 
-	system_control.vel_mot_der = 0.0;
-	system_control.vel_mot_izq = 0.0;
+	system_control.vel_mot_der = 0;
+	system_control.vel_mot_izq = 0;
 
 	system_ram_user.kp = system_flash_user.kp;
 	system_ram_user.kd = system_flash_user.kd;
@@ -617,21 +617,15 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 						 */
 						case 0xC1:
 							system_byte_converter.u8[0] = cmd_manager->buffer_read->data[cmd_manager->read_payload_init];
-							system_byte_converter.u8[1] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 1)];
-							system_byte_converter.u8[2] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 2)];
-							system_byte_converter.u8[3] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 3)];
 
-							pwm_set_motor_der_speed(system_byte_converter.f);
+							pwm_set_motor_der_speed(system_byte_converter.i8[0]);
 
-							system_byte_converter.u8[0] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 4)];
-							system_byte_converter.u8[1] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 5)];
-							system_byte_converter.u8[2] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 6)];
-							system_byte_converter.u8[3] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 7)];
+							system_byte_converter.u8[0] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 1)];
 
-							pwm_set_motor_izq_speed(system_byte_converter.f);
+							pwm_set_motor_izq_speed(system_byte_converter.i8[0]);
 
-							system_byte_converter.u8[0] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 8)];
-							system_byte_converter.u8[1] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 9)];
+							system_byte_converter.u8[0] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 2)];
+							system_byte_converter.u8[1] = cmd_manager->buffer_read->data[(uint8_t)(cmd_manager->read_payload_init + 3)];
 
 							if (system_byte_converter.u16[0] != 0)
 							{
@@ -1007,30 +1001,30 @@ void system_pid_control(void)
 {
 	// Distancia optima a la pared 1500
 	system_control.error_vel = system_control.error;
-	system_control.error = 2000 - adc_buffer.mean[5];
+	system_control.error = adc_buffer.mean[0] - adc_buffer.mean[5];
 	system_control.error_vel = system_control.error_vel - system_control.error;
 
 	if (system_control.state == SYSTEM_CONTROL_STATE_ON)
 	{
 		// Algoritmo de PID
-		system_control.p = system_control.error / (SYSTEM_CONTROL_ERROR_MIN * 1.0) * system_ram_user.kp;
-		system_control.d = system_control.error_vel / (SYSTEM_CONTROL_ERROR_MAX * 1.0) * system_ram_user.kd;
-		system_control.i += system_control.error / (SYSTEM_CONTROL_ERROR_MAX * 100.0) * system_ram_user.ki;
+		system_control.p = system_control.error * system_ram_user.kp;
+		system_control.d = system_control.error_vel * system_ram_user.kd;
+		system_control.i = system_control.i + system_control.error * system_ram_user.ki;
 
 		// Limites de los valores
-		if (system_control.p > 100.0)
+		if (system_control.p > 60)
 		{
-			system_control.p = 100.0;
+			system_control.p = 60;
 		}
 
-		if (system_control.d > 100.0)
+		if (system_control.d > 60)
 		{
-			system_control.d = 100.0;
+			system_control.d = 60;
 		}
 
-		if (system_control.i > 100.0)
+		if (system_control.i > 30)
 		{
-			system_control.i = 100.0;
+			system_control.i = 30;
 		}
 
 		// Motor de la derecha
@@ -1070,9 +1064,9 @@ void system_pid_control(void)
 
 	else
 	{
-		system_control.p = 0.0;
-		system_control.d = 0.0;
-		system_control.i = 0.0;
+		system_control.p = 0;
+		system_control.d = 0;
+		system_control.i = 0;
 	}
 }
 

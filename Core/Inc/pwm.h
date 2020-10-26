@@ -45,13 +45,13 @@ void pwm_stop_motor(void);
  * Funcion que establece la velocidad del motor de la derecha en %
  *
  */
-void pwm_set_motor_der_speed(float vel);
+void pwm_set_motor_der_speed(int8_t vel);
 
 /*
  * Funcion que establece la velocidad del motor de la izquierda en %
  *
  */
-void pwm_set_motor_izq_speed(float vel);
+void pwm_set_motor_izq_speed(int8_t vel);
 /**********************************************************************************/
 /**********************************************************************************/
 /**********************************************************************************/

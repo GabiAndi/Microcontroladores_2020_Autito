@@ -5,6 +5,7 @@
 /*********************************** Includes *************************************/
 /**********************************************************************************/
 #include <inttypes.h>
+#include <string.h>
 
 #include "stm32f1xx_hal.h"
 
@@ -56,11 +57,10 @@
 /**********************************************************************************/
 
 /************************************* PID ****************************************/
-#define SYSTEM_CONTROL_ERROR_MAX				1600
-#define SYSTEM_CONTROL_ERROR_MIN				-1600
+#define SYSTEM_CONTROL_ERROR_MAX				3400
 
-#define SYSTEM_CONTROL_BASE_SPEED				25.0F
-#define SYSTEM_CONTROL_MAX_SPEED				80.0F
+#define SYSTEM_CONTROL_BASE_SPEED				30
+#define SYSTEM_CONTROL_MAX_SPEED				70
 
 #define SYSTEM_CONTROL_RES_MS					50
 /**********************************************************************************/
@@ -78,15 +78,15 @@ typedef struct
 {
 	uint8_t state;
 
-	float vel_mot_der;
-	float vel_mot_izq;
+	int8_t vel_mot_der;
+	int8_t vel_mot_izq;
 
 	int16_t error;
 	int16_t error_vel;
 
-	float p;
-	float i;
-	float d;
+	uint16_t p;
+	uint16_t i;
+	uint16_t d;
 }system_control_t;
 /**********************************************************************************/
 

@@ -13,8 +13,8 @@ extern TIM_HandleTypeDef htim4;
 /**********************************************************************************/
 
 /************************* Velocidad de los motores *******************************/
-float vel_mot_der;
-float vel_mot_izq;
+int8_t vel_mot_der;
+int8_t vel_mot_izq;
 /**********************************************************************************/
 
 /**********************************************************************************/
@@ -29,8 +29,8 @@ void pwm_init(void)
 	/***********************************************************************************/
 	/**************** Inicializacion de las velocidades de los motores *****************/
 	/***********************************************************************************/
-	vel_mot_der = 0.0;
-	vel_mot_izq = 0.0;
+	vel_mot_der = 0;
+	vel_mot_izq = 0;
 	/***********************************************************************************/
 
 	/***********************************************************************************/
@@ -64,7 +64,7 @@ void pwm_init(void)
 
 void pwm_change_freq(uint16_t freq)
 {
-	__HAL_TIM_SET_AUTORELOAD(&htim4, (72000000.0 / (4.0 * freq)));
+	__HAL_TIM_SET_AUTORELOAD(&htim4, (72000000 / (4 * freq)));
 
 	pwm_set_motor_der_speed(vel_mot_der);
 	pwm_set_motor_izq_speed(vel_mot_izq);
@@ -90,80 +90,80 @@ void pwm_stop_motor(void)
 	vel_mot_izq = 0;
 }
 
-void pwm_set_motor_der_speed(float vel)
+void pwm_set_motor_der_speed(int8_t vel)
 {
 	vel_mot_der = vel;
 
-	if ((vel_mot_der > -0.01) && (vel_mot_der < 0.01))
+	if (vel_mot_der == 0)
 	{
 		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);
 		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
 	}
 
-	else if ((vel_mot_der >= 0.01) && (vel_mot_der <= 100.00))
+	else if ((vel_mot_der > 0) && (vel_mot_der <= 100))
 	{
-		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, (__HAL_TIM_GET_AUTORELOAD(&htim4) * (vel_mot_der / 100.0)));
+		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, (__HAL_TIM_GET_AUTORELOAD(&htim4) * vel_mot_der) / 100);
 		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
 	}
 
-	else if (vel_mot_der > 100.00)
+	else if (vel_mot_der > 100)
 	{
-		vel_mot_der = 100.00;
+		vel_mot_der = 100;
 
-		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, (__HAL_TIM_GET_AUTORELOAD(&htim4) * (vel_mot_der / 100.0)));
+		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, (__HAL_TIM_GET_AUTORELOAD(&htim4) * vel_mot_der) / 100);
 		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
 	}
 
-	else if ((vel_mot_der <= -0.01) && (vel_mot_der >= -100.00))
+	else if ((vel_mot_der < 0) && (vel_mot_der >= -100))
 	{
 		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 0);
-		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, (__HAL_TIM_GET_AUTORELOAD(&htim4) * (vel_mot_der / 100.0) * -1.0));
+		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, (__HAL_TIM_GET_AUTORELOAD(&htim4) * vel_mot_der) / -100);
 	}
 
-	else if (vel_mot_der < -100.00)
+	else if (vel_mot_der < -100)
 	{
-		vel_mot_der = -100.00;
+		vel_mot_der = -100;
 
-		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, (__HAL_TIM_GET_AUTORELOAD(&htim4) * (vel_mot_der / 100.0) * -1.0));
+		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, (__HAL_TIM_GET_AUTORELOAD(&htim4) * vel_mot_der) / -100);
 		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0);
 	}
 }
 
-void pwm_set_motor_izq_speed(float vel)
+void pwm_set_motor_izq_speed(int8_t vel)
 {
 	vel_mot_izq = vel;
 
-	if ((vel_mot_izq > -0.01) && (vel_mot_izq < 0.01))
+	if (vel_mot_izq == 0)
 	{
 		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 0);
 		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, 0);
 	}
 
-	else if ((vel_mot_izq >= 0.01) && (vel_mot_izq <= 100.00))
+	else if ((vel_mot_izq > 0) && (vel_mot_izq <= 100))
 	{
-		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, (__HAL_TIM_GET_AUTORELOAD(&htim4) * (vel_mot_izq / 100.0)));
+		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, (__HAL_TIM_GET_AUTORELOAD(&htim4) * vel_mot_izq) / 100);
 		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, 0);
 	}
 
-	else if (vel_mot_izq > 100.00)
+	else if (vel_mot_izq > 100)
 	{
-		vel_mot_izq = 100.00;
+		vel_mot_izq = 100;
 
-		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, (__HAL_TIM_GET_AUTORELOAD(&htim4) * (vel_mot_izq / 100.0)));
+		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, (__HAL_TIM_GET_AUTORELOAD(&htim4) * vel_mot_izq) / 100);
 		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, 0);
 	}
 
-	else if ((vel_mot_izq <= -0.01) && (vel_mot_izq >= -100.00))
+	else if ((vel_mot_izq < 0) && (vel_mot_izq >= -100))
 	{
 		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 0);
-		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, (__HAL_TIM_GET_AUTORELOAD(&htim4) * (vel_mot_izq / 100.0) * -1.0));
+		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, (__HAL_TIM_GET_AUTORELOAD(&htim4) * vel_mot_izq) / -100);
 	}
 
-	else if (vel_mot_izq < -100.00)
+	else if (vel_mot_izq < -100)
 	{
-		vel_mot_izq = -100.00;
+		vel_mot_izq = -100;
 
-		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, (__HAL_TIM_GET_AUTORELOAD(&htim4) * (vel_mot_izq / 100.0) * -1.0));
+		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, (__HAL_TIM_GET_AUTORELOAD(&htim4) * vel_mot_izq) / -100);
 		__HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_4, 0);
 	}
 }
