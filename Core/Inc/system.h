@@ -78,15 +78,15 @@ typedef struct
 {
 	uint8_t state;
 
-	int8_t vel_mot_der;
-	int8_t vel_mot_izq;
+	int8_t p;
+	int8_t d;
+	int8_t i;
 
 	int16_t error;
 	int16_t error_vel;
 
-	uint16_t p;
-	uint16_t i;
-	uint16_t d;
+	int8_t vel_mot_der;
+	int8_t vel_mot_izq;
 }system_control_t;
 /**********************************************************************************/
 

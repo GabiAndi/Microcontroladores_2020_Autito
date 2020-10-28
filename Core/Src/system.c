@@ -999,59 +999,102 @@ void system_adc_send_data(void)
 
 void system_pid_control(void)
 {
-	// Distancia optima a la pared 1500
+	// Distancia optima a la pared es el centro, es decir la resta de los valores del adc
 	system_control.error_vel = system_control.error;
 	system_control.error = adc_buffer.mean[0] - adc_buffer.mean[5];
 	system_control.error_vel = system_control.error_vel - system_control.error;
 
+	// Algoritmo de PID
+	// Limite proporcional
+	system_byte_converter.i32 = system_control.error / (SYSTEM_CONTROL_ERROR_MAX / 100) * system_ram_user.kp;
+
+	if (system_byte_converter.i32 > 60)
+	{
+		system_control.p = 60;
+	}
+
+	else if (system_byte_converter.i32 < -60)
+	{
+		system_control.p = -60;
+	}
+
+	else
+	{
+		system_control.p = (int8_t)(system_byte_converter.i32);
+	}
+
+	// Limite derivativo
+	system_byte_converter.i32 = system_control.error_vel / (SYSTEM_CONTROL_ERROR_MAX / 100) * system_ram_user.kd;
+
+	if (system_byte_converter.i32 > 60)
+	{
+		system_control.d = 60;
+	}
+
+	else if (system_byte_converter.i32 < -60)
+	{
+		system_control.d = -60;
+	}
+
+	else
+	{
+		system_control.d = (int8_t)(system_byte_converter.i32);
+	}
+
+	// Limite integral
+	system_byte_converter.i32 = system_control.i + (system_control.error / (SYSTEM_CONTROL_ERROR_MAX / 100) * system_ram_user.ki) / 10;
+
+	if (system_byte_converter.i32 > 60)
+	{
+		system_control.i = 60;
+	}
+
+	else if (system_byte_converter.i32 < -60)
+	{
+		system_control.i = -60;
+	}
+
+	else
+	{
+		system_control.i = (int8_t)(system_byte_converter.i32);
+	}
+
 	if (system_control.state == SYSTEM_CONTROL_STATE_ON)
 	{
-		// Algoritmo de PID
-		system_control.p = system_control.error * system_ram_user.kp;
-		system_control.d = system_control.error_vel * system_ram_user.kd;
-		system_control.i = system_control.i + system_control.error * system_ram_user.ki;
-
-		// Limites de los valores
-		if (system_control.p > 60)
-		{
-			system_control.p = 60;
-		}
-
-		if (system_control.d > 60)
-		{
-			system_control.d = 60;
-		}
-
-		if (system_control.i > 30)
-		{
-			system_control.i = 30;
-		}
-
 		// Motor de la derecha
-		system_control.vel_mot_der = SYSTEM_CONTROL_BASE_SPEED + system_control.p + system_control.i + system_control.d;
+		system_byte_converter.i32 = SYSTEM_CONTROL_BASE_SPEED + system_control.p + system_control.i + system_control.d;
 
-		// Motor de la izquierda
-		system_control.vel_mot_izq = -SYSTEM_CONTROL_BASE_SPEED + system_control.p + system_control.i + system_control.d;
-
-		// Limite de valores de velocidad
-		if (system_control.vel_mot_der > SYSTEM_CONTROL_MAX_SPEED)
+		if (system_byte_converter.i32 > SYSTEM_CONTROL_MAX_SPEED)
 		{
 			system_control.vel_mot_der = SYSTEM_CONTROL_MAX_SPEED;
 		}
 
-		else if (system_control.vel_mot_der < -SYSTEM_CONTROL_MAX_SPEED)
+		else if (system_byte_converter.i32 < -SYSTEM_CONTROL_MAX_SPEED)
 		{
 			system_control.vel_mot_der = -SYSTEM_CONTROL_MAX_SPEED;
 		}
 
-		if (system_control.vel_mot_izq > SYSTEM_CONTROL_MAX_SPEED)
+		else
+		{
+			system_control.vel_mot_der = (int8_t)(system_byte_converter.i32);
+		}
+
+		// Motor de la izquierda
+		system_byte_converter.i32 = -SYSTEM_CONTROL_BASE_SPEED + system_control.p + system_control.i + system_control.d;
+
+		if (system_byte_converter.i32 > SYSTEM_CONTROL_MAX_SPEED)
 		{
 			system_control.vel_mot_izq = SYSTEM_CONTROL_MAX_SPEED;
 		}
 
-		else if (system_control.vel_mot_izq < -SYSTEM_CONTROL_MAX_SPEED)
+		else if (system_byte_converter.i32 < -SYSTEM_CONTROL_MAX_SPEED)
 		{
 			system_control.vel_mot_izq = -SYSTEM_CONTROL_MAX_SPEED;
+		}
+
+		else
+		{
+			system_control.vel_mot_izq = (int8_t)(system_byte_converter.i32);
 		}
 
 		// Se le da la velocidad a los motores
@@ -1064,9 +1107,8 @@ void system_pid_control(void)
 
 	else
 	{
-		system_control.p = 0;
-		system_control.d = 0;
-		system_control.i = 0;
+		system_control.vel_mot_der = pwm_get_motor_der_speed();
+		system_control.vel_mot_izq = pwm_get_motor_izq_speed();
 	}
 }
 
@@ -1074,9 +1116,7 @@ void system_error_send_data(void)
 {
 	if (system_error_buffer_send_data != 0)
 	{
-		system_byte_converter.i16[0] = system_control.error;
-
-		system_write_cmd(system_error_buffer_send_data, 0xA3, &system_byte_converter.u8[0], 2);
+		system_write_cmd(system_error_buffer_send_data, 0xA3, (uint8_t *)(&system_control), sizeof(system_control_t));
 	}
 }
 
@@ -1091,6 +1131,13 @@ void system_control_state_button(void)
 		if (system_control.state == SYSTEM_CONTROL_STATE_OFF)
 		{
 			system_control.state = SYSTEM_CONTROL_STATE_ON;
+
+			system_control.p = 0;
+			system_control.d = 0;
+			system_control.i = 0;
+
+			system_control.vel_mot_der = 0;
+			system_control.vel_mot_izq = 0;
 		}
 
 		else

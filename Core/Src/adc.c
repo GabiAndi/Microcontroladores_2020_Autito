@@ -6,7 +6,6 @@
 
 /*********************************** Tickers **************************************/
 ticker_t adc_ticker_capture;
-
 ticker_t adc_ticker_send_data;
 /**********************************************************************************/
 
@@ -52,7 +51,6 @@ void adc_init(void)
 	adc_ticker_capture.active = TICKER_ACTIVE;
 
 	ticker_new(&adc_ticker_capture);
-
 	/***********************************************************************************/
 
 	/***********************************************************************************/
@@ -62,6 +60,20 @@ void adc_init(void)
 
 void adc_capture(void)
 {
+	// Se calcula la media movil
+	for (uint8_t i = 0 ; i < 6 ; i++)
+	{
+		adc_buffer.mean[i] = ((adc_buffer.mean[i] + adc_buffer.data[adc_buffer.data_index][i]) / 2);
+	}
+
+	adc_buffer.data_index++;
+
+	if (adc_buffer.data_index >= ADC_BUFFER_LENGTH)
+	{
+		adc_buffer.data_index = 0;
+	}
+
+	// Se inicia la conversion del ADC en DMA
 	HAL_ADC_Start_DMA(&hadc1, (uint32_t *)(&adc_buffer.data[adc_buffer.data_index]), 6);
 }
 /***********************************************************************************/
@@ -73,20 +85,7 @@ void adc_capture(void)
 /**********************************************************************************/
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
-	if (hadc->Instance == ADC1)
-	{
-		for (uint8_t i = 0 ; i < 6 ; i++)
-		{
-			adc_buffer.mean[i] = ((adc_buffer.mean[i] + adc_buffer.data[adc_buffer.data_index][i]) / 2.0);
-		}
 
-		adc_buffer.data_index++;
-
-		if (adc_buffer.data_index >= ADC_BUFFER_LENGTH)
-		{
-			adc_buffer.data_index = 0;
-		}
-	}
 }
 /***********************************************************************************/
 /***********************************************************************************/

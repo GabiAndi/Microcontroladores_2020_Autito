@@ -11,7 +11,6 @@ extern system_flash_data_t system_ram_user;
 /*********************************** Tickers **************************************/
 ticker_t esp_ticker_read_time_out;
 ticker_t esp_ticker_write_time_out;
-
 ticker_t esp_ticker_connect_to_ap;
 ticker_t esp_ticker_hard_reset_stop;
 ticker_t esp_ticker_enable_usart_receibe;
