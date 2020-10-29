@@ -59,10 +59,10 @@
 /************************************* PID ****************************************/
 #define SYSTEM_CONTROL_ERROR_MAX				3400
 
-#define SYSTEM_CONTROL_BASE_SPEED				30
-#define SYSTEM_CONTROL_MAX_SPEED				70
+#define SYSTEM_CONTROL_BASE_SPEED				3000
+#define SYSTEM_CONTROL_MAX_SPEED				10000
 
-#define SYSTEM_CONTROL_RES_MS					50
+#define SYSTEM_CONTROL_RES_MS					20
 /**********************************************************************************/
 
 /**********************************************************************************/
@@ -73,21 +73,21 @@
 /*********************************** Typedef **************************************/
 /**********************************************************************************/
 
-/***************************** Estructura de control ******************************/
+/******************************* Estructura del PID *******************************/
 typedef struct
 {
 	uint8_t state;
 
-	int8_t p;
-	int8_t d;
-	int8_t i;
+	int16_t p;
+	int16_t d;
+	int16_t i;
 
 	int16_t error;
 	int16_t error_vel;
 
-	int8_t vel_mot_der;
-	int8_t vel_mot_izq;
-}system_control_t;
+	int16_t vel_mot_der;
+	int16_t vel_mot_izq;
+}__attribute__ ((packed)) system_pid_t;
 /**********************************************************************************/
 
 /**********************************************************************************/
