@@ -586,6 +586,13 @@ uint8_t system_data_package(system_cmd_manager_t *cmd_manager)
 								system_pid.state = SYSTEM_CONTROL_STATE_ON;
 
 								system_control_buffer_send_data = cmd_manager->buffer_write;
+
+								system_pid.p = 0;
+								system_pid.d = 0;
+								system_pid.i = 0;
+
+								system_pid.vel_mot_der = 0;
+								system_pid.vel_mot_izq = 0;
 							}
 
 							else if (cmd_manager->buffer_read->data[cmd_manager->read_payload_init] == 0x00)
@@ -1024,12 +1031,13 @@ void system_pid_control(void)
 	 *
 	 */
 	system_pid.error_vel = system_pid.error;
-	system_pid.error = adc_buffer.mean[5] - adc_buffer.mean[0];
-	system_pid.error_vel = system_pid.error - system_pid.error_vel;
+	system_pid.error = adc_buffer.mean[0] * system_ram_user.p0 + adc_buffer.mean[1] * system_ram_user.p1 + adc_buffer.mean[2] * system_ram_user.p2
+			+ adc_buffer.mean[3] * system_ram_user.p3 + adc_buffer.mean[4] * system_ram_user.p4 + adc_buffer.mean[5] * system_ram_user.p5;
+	system_pid.error_vel = (system_pid.error - system_pid.error_vel) / 2;
 
 	// Algoritmo de PID los saltos de las constantes con k = 1 son de saltos de a 100 como maximo
 	// Limite proporcional
-	system_byte_converter.i32 = (system_pid.error / (SYSTEM_CONTROL_ERROR_MAX / 100) * system_ram_user.kp);
+	system_byte_converter.i32 = (system_pid.error / 50) * system_ram_user.kp;
 
 	if (system_byte_converter.i32 > 7000)
 	{
@@ -1047,7 +1055,7 @@ void system_pid_control(void)
 	}
 
 	// Limite derivativo
-	system_byte_converter.i32 = (system_pid.error_vel / (SYSTEM_CONTROL_ERROR_MAX / 100) * system_ram_user.kd);
+	system_byte_converter.i32 = (system_pid.error_vel / 50) * system_ram_user.kd;
 
 	if (system_byte_converter.i32 > 5000)
 	{
@@ -1065,7 +1073,7 @@ void system_pid_control(void)
 	}
 
 	// Limite integral
-	system_byte_converter.i32 = system_pid.i + (system_pid.error / (SYSTEM_CONTROL_ERROR_MAX / 100) * system_ram_user.ki);
+	system_byte_converter.i32 = system_pid.i + (system_pid.error / 100) * system_ram_user.ki;
 
 	if (system_byte_converter.i32 > 3000)
 	{
@@ -1118,6 +1126,13 @@ void system_pid_control(void)
 		else
 		{
 			system_pid.vel_mot_izq = (int16_t)(system_byte_converter.i32);
+		}
+
+		// Si se detecta una pared se detiene
+		if (adc_buffer.mean[1] >= 1500 && adc_buffer.mean[4] >= 1500)
+		{
+			system_pid.vel_mot_der = 0;
+			system_pid.vel_mot_izq = 0;
 		}
 
 		// Se le da la velocidad a los motores
