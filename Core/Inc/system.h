@@ -57,8 +57,9 @@
 /**********************************************************************************/
 
 /************************************* PID ****************************************/
-#define SYSTEM_CONTROL_BASE_SPEED				3000
-#define SYSTEM_CONTROL_MAX_SPEED				10000
+#define SYSTEM_CONTROL_MIN_SPEED				-1000
+#define SYSTEM_CONTROL_BASE_SPEED				2500
+#define SYSTEM_CONTROL_MAX_SPEED				8000
 
 #define SYSTEM_CONTROL_RES_MS					20
 /**********************************************************************************/

@@ -1057,14 +1057,14 @@ void system_pid_control(void)
 	// Limite derivativo
 	system_byte_converter.i32 = (system_pid.error_vel / 50) * system_ram_user.kd;
 
-	if (system_byte_converter.i32 > 5000)
+	if (system_byte_converter.i32 > 4500)
 	{
-		system_pid.d = 5000;
+		system_pid.d = 4500;
 	}
 
-	else if (system_byte_converter.i32 < -5000)
+	else if (system_byte_converter.i32 < -4500)
 	{
-		system_pid.d = -5000;
+		system_pid.d = -4500;
 	}
 
 	else
@@ -1100,9 +1100,9 @@ void system_pid_control(void)
 			system_pid.vel_mot_der = SYSTEM_CONTROL_MAX_SPEED;
 		}
 
-		else if (system_byte_converter.i32 < -SYSTEM_CONTROL_MAX_SPEED)
+		else if (system_byte_converter.i32 < SYSTEM_CONTROL_MIN_SPEED)
 		{
-			system_pid.vel_mot_der = -SYSTEM_CONTROL_MAX_SPEED;
+			system_pid.vel_mot_der = SYSTEM_CONTROL_MIN_SPEED;
 		}
 
 		else
@@ -1113,9 +1113,9 @@ void system_pid_control(void)
 		// Motor de la izquierda
 		system_byte_converter.i32 = -SYSTEM_CONTROL_BASE_SPEED + system_pid.p + system_pid.i + system_pid.d;
 
-		if (system_byte_converter.i32 > SYSTEM_CONTROL_MAX_SPEED)
+		if (system_byte_converter.i32 > -SYSTEM_CONTROL_MIN_SPEED)
 		{
-			system_pid.vel_mot_izq = SYSTEM_CONTROL_MAX_SPEED;
+			system_pid.vel_mot_izq = -SYSTEM_CONTROL_MIN_SPEED;
 		}
 
 		else if (system_byte_converter.i32 < -SYSTEM_CONTROL_MAX_SPEED)
@@ -1129,11 +1129,13 @@ void system_pid_control(void)
 		}
 
 		// Si se detecta una pared se detiene
-		if (adc_buffer.mean[1] >= 1500 && adc_buffer.mean[4] >= 1500)
+		/*if (adc_buffer.mean[1] >= 1500 && adc_buffer.mean[4] >= 1500)
 		{
+			system_pid.state = SYSTEM_CONTROL_STATE_OFF;
+
 			system_pid.vel_mot_der = 0;
 			system_pid.vel_mot_izq = 0;
-		}
+		}*/
 
 		// Se le da la velocidad a los motores
 		pwm_set_motor_der_speed(system_pid.vel_mot_der);
